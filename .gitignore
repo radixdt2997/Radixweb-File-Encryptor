@@ -41,7 +41,7 @@ coverage/
 # Implementation/Documentation (one-time reference only)
 COMPLETION_REPORT.md
 IMPLEMENTATION_SUMMARY.md
-FILE_MANIFEST.txt
+*.txt
 
 # Server placeholder (not needed until backend phase)
 secure-file-app/server/

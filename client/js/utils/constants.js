@@ -30,7 +30,30 @@ export const UI_MESSAGES = {
     CORRUPTED_FILE: 'File appears to be corrupted or invalid.',
 };
 
+// Phase 2: OTP and Key Wrapping Constants
+export const OTP_CONFIG = {
+    LENGTH: 6,                      // 6-digit OTP
+    EXPIRY_MINUTES: 5,              // OTP expires after 5 minutes
+    MAX_ATTEMPTS: 3,                // Maximum verification attempts
+    RESEND_COOLDOWN_SECONDS: 30,    // Cooldown between OTP requests
+};
+
+export const FILE_DELIVERY_CONFIG = {
+    DEFAULT_EXPIRY_MINUTES: 60,     // Default file expiry: 1 hour
+    MAX_EXPIRY_MINUTES: 1440,       // Maximum expiry: 24 hours
+    EXPIRY_TYPES: ['one-time', 'time-based'],
+    MAX_FILE_SIZE_MB: 100,
+};
+
+// API Configuration
+// In browser, we can't use process.env, so we default to localhost
+export const API_CONFIG = {
+    BASE_URL: 'http://localhost:3000/api',
+    TIMEOUT_MS: 30000,
+};
+
 // Timeouts
 export const TIMEOUTS = {
     MESSAGE_DISPLAY: 5000, // 5 seconds
+    OTP_EXPIRY_WARNING: 60000, // 1 minute before expiry, show warning
 };

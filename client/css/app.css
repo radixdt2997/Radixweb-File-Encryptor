@@ -188,9 +188,12 @@ button:disabled {
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.6;
     }
@@ -226,6 +229,162 @@ input[type='file']::file-selector-button:hover {
     margin-top: 0.4rem;
 }
 
+/* Mode selector (Phase 2) */
+.mode-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #333333;
+    padding-bottom: 1rem;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.7rem 1rem;
+    background-color: #0f0f0f;
+    color: #808080;
+    border: 2px solid #333333;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    color: #e0e0e0;
+    border-color: #555555;
+}
+
+.mode-btn.active {
+    background-color: #1a1a1a;
+    color: #0052cc;
+    border-color: #0052cc;
+    border-bottom-color: #1a1a1a;
+}
+
+/* Mode content (hide by default) */
+.mode-content {
+    display: none;
+}
+
+.mode-content.active {
+    display: block;
+}
+
+/* Form row (for side-by-side fields) */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Result box */
+.result-box {
+    background-color: #0f0f0f;
+    border: 2px solid #0052cc;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    animation: slideUp 0.3s ease-out;
+}
+
+.result-box h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #0052cc;
+    font-size: 1.1rem;
+}
+
+.result-item {
+    margin-bottom: 1rem;
+}
+
+.result-item label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #e0e0e0;
+}
+
+.result-content {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.result-content code {
+    flex: 1;
+    background-color: #1a1a1a;
+    padding: 0.7rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #333333;
+    word-break: break-all;
+    color: #0052cc;
+    font-weight: 600;
+}
+
+.btn-copy {
+    background-color: #0052cc;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-copy:hover {
+    background-color: #0043a8;
+}
+
+.btn-copy:disabled {
+    background-color: #333333;
+    cursor: not-allowed;
+}
+
+/* Select fields */
+select {
+    width: 100%;
+    padding: 0.7rem;
+    background-color: #0f0f0f;
+    color: #e0e0e0;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+select:focus {
+    outline: none;
+    border-color: #0052cc;
+    box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.1);
+}
+
+select:disabled {
+    background-color: #1a1a1a;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+/* Animation for result box */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Responsive */
 @media (max-width: 640px) {
     .card {
@@ -244,5 +403,22 @@ input[type='file']::file-selector-button:hover {
 
     button {
         width: 100%;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .mode-selector {
+        flex-direction: column;
+    }
+
+    .mode-btn {
+        border-radius: 4px;
+        border: 2px solid #333333;
+    }
+
+    .mode-btn.active {
+        border-color: #0052cc;
     }
 }
