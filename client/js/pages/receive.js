@@ -12,12 +12,12 @@
  * The server never receives the OTP in plaintext.
  */
 
-import { verifyOTP, downloadFile, getFileMetadata } from '../utils/api.js';
-import { unwrapFileKey } from '../crypto/wrapping.js';
 import { decrypt } from '../crypto/crypto.js';
-import { showSuccess, showError, showInfo } from '../ui/feedback.js';
-import { setButtonLoading, disableAllButtons, enableAllButtons } from '../ui/state.js';
-import { downloadFileToUser } from '../utils/download.js';
+import { unwrapFileKey } from '../crypto/wrapping.js';
+import { showError, showInfo, showSuccess } from '../ui/feedback.js';
+import { setButtonLoading } from '../ui/state.js';
+import { downloadFile as downloadFromServer, getFileMetadata, verifyOTP } from '../utils/api.js';
+import { downloadFile } from '../utils/download.js';
 
 let currentFileId = null;
 let currentWrappedKey = null;
@@ -54,11 +54,18 @@ export async function initRecipientPage(fileId) {
 /**
  * Setup recipient page event listeners
  */
-export function setupRecipientListeners() {
+function setupRecipientListeners() {
+    const recipientForm = document.getElementById('recipient-form');
     const otpInput = document.getElementById('recipient-otp-input');
     const verifyButton = document.getElementById('verify-otp-btn');
     const downloadButton = document.getElementById('download-btn');
     const resetButton = document.getElementById('recipient-reset-btn');
+
+    // Prevent form submission on any button click
+    recipientForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        return false;
+    });
 
     // OTP input only accepts digits
     otpInput.addEventListener('input', (e) => {
@@ -69,7 +76,9 @@ export function setupRecipientListeners() {
     });
 
     // Verify OTP
-    verifyButton.addEventListener('click', async () => {
+    verifyButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
         const otp = otpInput.value.trim();
         if (otp.length !== 6) {
             showError('OTP must be 6 digits');
@@ -80,7 +89,9 @@ export function setupRecipientListeners() {
     });
 
     // Download file
-    downloadButton.addEventListener('click', async () => {
+    downloadButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
         if (!currentFileData || !currentFileName) {
             showError('Please verify OTP first');
             return;
@@ -90,7 +101,8 @@ export function setupRecipientListeners() {
     });
 
     // Reset
-    resetButton.addEventListener('click', () => {
+    resetButton.addEventListener('click', (e) => {
+        e.preventDefault();
         resetRecipientForm();
     });
 }
@@ -120,7 +132,7 @@ async function verifyAndUnwrapKey(otp) {
 
         // Download encrypted file
         showInfo('Downloading encrypted file...');
-        currentFileData = await downloadFile(currentFileId);
+        currentFileData = await downloadFromServer(currentFileId);
 
         // Decrypt file
         showInfo('Decrypting file...');
@@ -148,7 +160,7 @@ async function decryptAndDownloadFile() {
         showInfo('Preparing download...');
 
         // Download to user's device
-        downloadFileToUser(currentFileData, currentFileName);
+        downloadFile(currentFileData, currentFileName);
 
         showSuccess('File downloaded successfully!');
     } catch (error) {
@@ -176,11 +188,7 @@ function resetRecipientForm() {
 }
 
 export {
-    currentFileId,
-    currentWrappedKey,
-    currentWrappedKeySalt,
-    currentFileData,
-    currentFileName,
-    initRecipientPage,
-    setupRecipientListeners
+    currentFileData, currentFileId, currentFileName, currentWrappedKey,
+    currentWrappedKeySalt, setupRecipientListeners
 };
+

@@ -51,13 +51,39 @@ export async function deriveKey(password, salt) {
 
 /**
  * Generate a random salt for key derivation
- * 
+ *
  * @returns {Uint8Array} - Random 16-byte salt
  */
 export function generateSalt() {
     const salt = new Uint8Array(PBKDF2.saltLength);
     crypto.getRandomValues(salt);
     return salt;
+}
+
+/**
+ * Generate a random AES-GCM key for direct encryption
+ *
+ * Used for Phase 2 key-based encryption where we generate
+ * a random key first, then encrypt with that key.
+ *
+ * @returns {Promise<CryptoKey>} - Random AES-GCM key
+ * @throws {Error} - If key generation fails
+ */
+export async function generateRandomKey() {
+    try {
+        const key = await crypto.subtle.generateKey(
+            {
+                name: AESGCM.algorithm,
+                length: AESGCM.keyLength,
+            },
+            true, // extractable: true (needed for key wrapping)
+            ['encrypt', 'decrypt']
+        );
+
+        return key;
+    } catch (error) {
+        throw new Error(`Key generation failed: ${error.message}`);
+    }
 }
 
 /**

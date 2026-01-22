@@ -30,6 +30,7 @@ let currentFileKey = null;
  * Initialize sender page event listeners
  */
 export function initSenderPage() {
+    const senderForm = document.getElementById('sender-form');
     const fileInput = document.getElementById('sender-file-input');
     const recipientEmail = document.getElementById('sender-recipient-email');
     const expiryMinutes = document.getElementById('sender-expiry-minutes');
@@ -43,6 +44,12 @@ export function initSenderPage() {
     const copyOTPButton = document.getElementById('copy-otp-btn');
     const resetButton = document.getElementById('sender-reset-btn');
 
+    // Prevent form submission on any button click
+    senderForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        return false;
+    });
+
     // File selection
     fileInput.addEventListener('change', (e) => {
         currentFile = e.target.files[0];
@@ -53,7 +60,9 @@ export function initSenderPage() {
     });
 
     // Encrypt file
-    encryptButton.addEventListener('click', async () => {
+    encryptButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
         if (!currentFile) {
             showError('Please select a file first');
             return;
@@ -63,7 +72,9 @@ export function initSenderPage() {
     });
 
     // Upload encrypted file
-    uploadButton.addEventListener('click', async () => {
+    uploadButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
         if (!currentFile || !currentFileKey) {
             showError('Please encrypt a file first');
             return;
@@ -79,14 +90,16 @@ export function initSenderPage() {
     });
 
     // Copy functions
-    copyLinkButton.addEventListener('click', () => {
+    copyLinkButton.addEventListener('click', (e) => {
+        e.preventDefault();
         const link = resultLink.textContent;
         navigator.clipboard.writeText(link).then(() => {
             showSuccess('Link copied to clipboard!');
         });
     });
 
-    copyOTPButton.addEventListener('click', () => {
+    copyOTPButton.addEventListener('click', (e) => {
+        e.preventDefault();
         const otp = resultOTP.textContent;
         navigator.clipboard.writeText(otp).then(() => {
             showSuccess('OTP copied to clipboard!');
@@ -94,7 +107,8 @@ export function initSenderPage() {
     });
 
     // Reset
-    resetButton.addEventListener('click', () => {
+    resetButton.addEventListener('click', (e) => {
+        e.preventDefault();
         resetSenderForm();
     });
 }

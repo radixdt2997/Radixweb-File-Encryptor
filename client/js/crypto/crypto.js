@@ -100,12 +100,91 @@ export async function decryptFile(encryptedBlob, password) {
 }
 
 /**
+ * Encrypt data with a pre-derived CryptoKey
+ *
+ * Used for Phase 2 key-based encryption (after key generation).
+ * Unlike encryptFile(), this doesn't derive keys from passwords.
+ *
+ * @param {Uint8Array} data - Data to encrypt
+ * @param {CryptoKey} key - Pre-derived AES-GCM key
+ * @returns {Promise<Uint8Array>} - Encrypted data (IV + ciphertext)
+ * @throws {Error} - If encryption fails
+ */
+export async function encrypt(data, key) {
+    try {
+        // Generate random IV for this encryption
+        const iv = crypto.getRandomValues(new Uint8Array(AESGCM.ivLength));
+
+        // Encrypt data using AES-GCM
+        const ciphertext = await crypto.subtle.encrypt(
+            {
+                name: AESGCM.algorithm,
+                iv: iv,
+            },
+            key,
+            data
+        );
+
+        // Convert ciphertext to Uint8Array
+        const ciphertextArray = new Uint8Array(ciphertext);
+
+        // Return IV + ciphertext (no salt needed since key is pre-derived)
+        const result = new Uint8Array(iv.length + ciphertextArray.length);
+        result.set(iv, 0);
+        result.set(ciphertextArray, iv.length);
+
+        return result;
+    } catch (error) {
+        throw new Error(`Encryption failed: ${error.message}`);
+    }
+}
+
+/**
+ * Decrypt data with a pre-derived CryptoKey
+ *
+ * Used for Phase 2 key-based decryption.
+ *
+ * @param {Uint8Array} encryptedData - Data to decrypt (IV + ciphertext)
+ * @param {CryptoKey} key - Pre-derived AES-GCM key
+ * @returns {Promise<Uint8Array>} - Decrypted data
+ * @throws {Error} - If decryption fails
+ */
+export async function decrypt(encryptedData, key) {
+    try {
+        // Extract IV and ciphertext
+        const iv = encryptedData.slice(0, AESGCM.ivLength);
+        const ciphertext = encryptedData.slice(AESGCM.ivLength);
+
+        // Decrypt using AES-GCM
+        const decryptedBuffer = await crypto.subtle.decrypt(
+            {
+                name: AESGCM.algorithm,
+                iv: iv,
+            },
+            key,
+            ciphertext
+        );
+
+        // Convert to Uint8Array
+        const decryptedData = new Uint8Array(decryptedBuffer);
+
+        return decryptedData;
+    } catch (error) {
+        // GCM authentication failure or decryption error
+        if (error.name === 'OperationError') {
+            throw new Error('Decryption failed: Invalid key or corrupted data');
+        }
+        throw new Error(`Decryption failed: ${error.message}`);
+    }
+}
+
+/**
  * PUBLIC SECURITY NOTES:
- * 
+ *
  * - AES-GCM provides authenticated encryption (AEAD)
  *   - Confidentiality: 256-bit AES encryption
  *   - Authenticity: GCM authentication tag prevents tampering
- * 
+ *
  * - Random salt per encryption prevents rainbow table attacks
  * - Random IV per encryption prevents key-IV pair reuse
  * - 12-byte IV (96 bits) is standard for GCM performance

@@ -85,3 +85,73 @@ export function clearMessageArea() {
         msgArea.style.display = 'none';
     }
 }
+
+/**
+ * Disable all sender mode buttons during processing
+ */
+export function disableAllButtons() {
+    const buttons = [
+        'sender-encrypt-btn',
+        'sender-upload-btn',
+        'sender-reset-btn'
+    ];
+
+    buttons.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.disabled = true;
+        }
+    });
+}
+
+/**
+ * Enable all sender mode buttons after processing
+ */
+export function enableAllButtons() {
+    const buttons = [
+        'sender-encrypt-btn',
+        'sender-upload-btn',
+        'sender-reset-btn'
+    ];
+
+    buttons.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.disabled = false;
+        }
+    });
+}
+
+/**
+ * Set loading state for a specific button
+ * @param {string} buttonId - ID of the button
+ * @param {boolean} loading - Whether to show loading state
+ */
+export function setButtonLoading(buttonId, loading) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+        button.disabled = loading;
+        if (loading) {
+            button.textContent = button.textContent.replace(/^[^\s]+/, '⏳');
+        } else {
+            // Reset to original text (this is a simple approach)
+            button.textContent = button.textContent.replace('⏳', getOriginalButtonText(buttonId));
+        }
+    }
+}
+
+/**
+ * Get original button text for a given button ID
+ * @param {string} buttonId - ID of the button
+ * @returns {string} Original button text
+ */
+function getOriginalButtonText(buttonId) {
+    const textMap = {
+        'sender-encrypt-btn': '🔒 Encrypt File',
+        'sender-upload-btn': '☁️ Upload & Share',
+        'sender-reset-btn': 'Reset',
+        'verify-otp-btn': 'Verify OTP',
+        'download-btn': 'Download File'
+    };
+    return textMap[buttonId] || '';
+}
