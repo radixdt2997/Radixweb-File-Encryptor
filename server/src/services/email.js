@@ -40,7 +40,6 @@ export async function initEmailService() {
   const emailSecure = process.env.EMAIL_SECURE === 'true';
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
-  const emailFrom = process.env.EMAIL_FROM || 'noreply@radixweb.com';
 
   // For development, allow mock email service
   const useMockEmail = emailMock.enabled || process.env.NODE_ENV === 'development';

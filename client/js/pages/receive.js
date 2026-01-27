@@ -16,8 +16,8 @@ import { decrypt } from '../crypto/crypto.js';
 import { unwrapFileKey } from '../crypto/wrapping.js';
 import { showError, showInfo, showSuccess } from '../ui/feedback.js';
 import { setButtonLoading } from '../ui/state.js';
-import { downloadFile as downloadFromServer, getFileMetadata, verifyOTP } from '../utils/api.js';
-import { downloadFile } from '../utils/download.js';
+import { downloadFile, getFileMetadata, verifyOTP } from '../utils/api.js';
+import { downloadFileToUser } from '../utils/download.js';
 
 let currentFileId = null;
 let currentWrappedKey = null;
@@ -132,7 +132,7 @@ async function verifyAndUnwrapKey(otp) {
 
         // Download encrypted file
         showInfo('Downloading encrypted file...');
-        currentFileData = await downloadFromServer(currentFileId);
+        currentFileData = await downloadFile(currentFileId);
 
         // Decrypt file
         showInfo('Decrypting file...');
@@ -160,7 +160,7 @@ async function decryptAndDownloadFile() {
         showInfo('Preparing download...');
 
         // Download to user's device
-        downloadFile(currentFileData, currentFileName);
+        downloadFileToUser(currentFileData, currentFileName);
 
         showSuccess('File downloaded successfully!');
     } catch (error) {

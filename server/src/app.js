@@ -115,20 +115,8 @@ app.use((req, res, next) => {
 
 const maxFileSize = parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024; // 100MB default
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../data/uploads');
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename with timestamp
-    const uniqueName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: maxFileSize
   },

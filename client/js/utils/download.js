@@ -37,6 +37,17 @@ export function downloadFile(data, filename) {
 }
 
 /**
+ * Backwards-compatible alias used by Phase 2 pages.
+ * Some modules import `downloadFileToUser` — keep it as an alias to `downloadFile`.
+ *
+ * @param {Uint8Array} data
+ * @param {string} filename
+ */
+export function downloadFileToUser(data, filename) {
+    return downloadFile(data, filename);
+}
+
+/**
  * Generate encrypted filename from original
  * 
  * @param {string} originalFilename - Original filename
