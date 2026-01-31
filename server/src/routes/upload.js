@@ -5,12 +5,12 @@
  * Server stores encrypted file and wrapped key, sends separate emails for link and OTP.
  */
 
-import express from "express";
 import crypto from "crypto";
+import express from "express";
 import { body, validationResult } from "express-validator";
-import { saveFile } from "../services/file-storage.js";
 import { createFileRecord, logAuditEvent } from "../services/database.js";
 import { sendDownloadLinkEmail, sendOTPEmail } from "../services/email.js";
+import { saveFile } from "../services/file-storage.js";
 
 const router = express.Router();
 
@@ -141,7 +141,7 @@ router.post("/", uploadValidation, async (req, res) => {
     console.log("[UPLOAD] DB record created:", recordId);
 
     // Generate download URL
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5173';
+    const baseUrl = process.env.BASE_URL || "http://localhost:5173";
     const downloadUrl = `${baseUrl}?fileId=${fileId}`;
 
     // Log successful upload
@@ -162,7 +162,10 @@ router.post("/", uploadValidation, async (req, res) => {
       expiryMinutes,
       otp: req.body.otp, // Pass the OTP from frontend
     };
-    console.log("[UPLOAD] fileBody for email:", { ...fileBody, otp: '[REDACTED]' });
+    console.log("[UPLOAD] fileBody for email:", {
+      ...fileBody,
+      otp: "[REDACTED]",
+    });
 
     // Send emails asynchronously (don't block response)
     setImmediate(async () => {

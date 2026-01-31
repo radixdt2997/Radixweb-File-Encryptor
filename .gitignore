@@ -41,11 +41,6 @@ coverage/
 # Server data
 ./server/data/*
 
-# Implementation/Documentation (one-time reference only)
-COMPLETION_REPORT.md
-IMPLEMENTATION_SUMMARY.md
-*.txt
-
 # Temporary files
 *.tmp
 *.bak

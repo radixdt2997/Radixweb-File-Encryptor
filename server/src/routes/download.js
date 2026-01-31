@@ -5,10 +5,15 @@
  * Called by client after successful OTP verification.
  */
 
-import express from 'express';
-import { param, validationResult } from 'express-validator';
-import { getFileById, updateFileStatus, isFileExpired, logAuditEvent } from '../services/database.js';
-import { readFile } from '../services/file-storage.js';
+import express from "express";
+import { param, validationResult } from "express-validator";
+import {
+  getFileById,
+  isFileExpired,
+  logAuditEvent,
+  updateFileStatus,
+} from "../services/database.js";
+import { readFile } from "../services/file-storage.js";
 
 const router = express.Router();
 
@@ -17,16 +22,18 @@ const router = express.Router();
 // ============================================================================
 
 const downloadValidation = [
-  param('fileId')
-    .matches(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i)
-    .withMessage('Valid file ID is required')
+  param("fileId")
+    .matches(
+      /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i,
+    )
+    .withMessage("Valid file ID is required"),
 ];
 
 // ============================================================================
 // DOWNLOAD ENDPOINT
 // ============================================================================
 
-router.get('/:fileId', downloadValidation, async (req, res) => {
+router.get("/:fileId", downloadValidation, async (req, res) => {
   const startTime = Date.now();
 
   try {
@@ -34,51 +41,51 @@ router.get('/:fileId', downloadValidation, async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Invalid file ID format',
-        details: errors.array()
+        error: "Validation Error",
+        message: "Invalid file ID format",
+        details: errors.array(),
       });
     }
 
     const { fileId } = req.params;
     const clientIP = req.ip;
-    const userAgent = req.get('User-Agent');
+    const userAgent = req.get("User-Agent");
 
     // Retrieve file record
     const file = await getFileById(fileId);
     if (!file) {
-      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
-        reason: 'file_not_found'
+      await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
+        reason: "file_not_found",
       });
 
       return res.status(404).json({
-        error: 'File Not Found',
-        message: 'The requested file does not exist'
+        error: "File Not Found",
+        message: "The requested file does not exist",
       });
     }
 
     // Check if file is expired
     if (await isFileExpired(fileId)) {
-      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
-        reason: 'file_expired',
-        expiryTime: file.expiry_time
+      await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
+        reason: "file_expired",
+        expiryTime: file.expiry_time,
       });
 
       return res.status(400).json({
-        error: 'File Expired',
-        message: 'This file has expired and is no longer available'
+        error: "File Expired",
+        message: "This file has expired and is no longer available",
       });
     }
 
     // Check if one-time file was already downloaded
-    if (file.expiry_type === 'one-time' && file.status === 'used') {
-      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
-        reason: 'already_used'
+    if (file.expiry_type === "one-time" && file.status === "used") {
+      await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
+        reason: "already_used",
       });
 
       return res.status(400).json({
-        error: 'File Already Used',
-        message: 'This file has already been downloaded'
+        error: "File Already Used",
+        message: "This file has already been downloaded",
       });
     }
 
@@ -86,51 +93,62 @@ router.get('/:fileId', downloadValidation, async (req, res) => {
     const fileBuffer = await readFile(file.file_path);
 
     // Mark file as downloaded (for one-time files)
-    if (file.expiry_type === 'one-time') {
-      await updateFileStatus(fileId, 'used', {
-        downloadedAt: new Date().toISOString()
+    if (file.expiry_type === "one-time") {
+      await updateFileStatus(fileId, "used", {
+        downloadedAt: new Date().toISOString(),
       });
     }
 
     // Log successful download
-    await logAuditEvent(fileId, 'download', clientIP, userAgent, {
+    await logAuditEvent(fileId, "download", clientIP, userAgent, {
       fileSize: fileBuffer.length,
-      processingTimeMs: Date.now() - startTime
+      processingTimeMs: Date.now() - startTime,
     });
 
     // Set response headers
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
-    res.setHeader('Content-Length', fileBuffer.length);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${file.file_name}"`,
+    );
+    res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     // Send the encrypted file
     res.send(fileBuffer);
 
-    console.log(`📥 File downloaded: ${fileId} (${file.file_name}, ${fileBuffer.length} bytes)`);
-
+    console.log(
+      `📥 File downloaded: ${fileId} (${file.file_name}, ${fileBuffer.length} bytes)`,
+    );
   } catch (error) {
-    console.error('Download error:', error);
+    console.error("Download error:", error);
 
     // Log download error
-    await logAuditEvent(req.params.fileId, 'download_error', req.ip, req.get('User-Agent'), {
-      error: error.message,
-      processingTimeMs: Date.now() - startTime
-    });
+    await logAuditEvent(
+      req.params.fileId,
+      "download_error",
+      req.ip,
+      req.get("User-Agent"),
+      {
+        error: error.message,
+        processingTimeMs: Date.now() - startTime,
+      },
+    );
 
-    if (error.message === 'File not found') {
+    if (error.message === "File not found") {
       return res.status(404).json({
-        error: 'File Not Found',
-        message: 'The requested file could not be found'
+        error: "File Not Found",
+        message: "The requested file could not be found",
       });
     }
 
     res.status(500).json({
-      error: 'Download Failed',
-      message: 'Failed to download file',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: "Download Failed",
+      message: "Failed to download file",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 });

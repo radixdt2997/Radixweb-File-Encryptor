@@ -5,15 +5,16 @@
  * Currently implements local disk storage, easily extensible to S3/cloud storage.
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import crypto from 'crypto';
-import { fileURLToPath } from 'url';
+import crypto from "crypto";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Configuration
-const STORAGE_PATH = process.env.STORAGE_PATH || path.join(__dirname, '../../data/uploads');
+const STORAGE_PATH =
+  process.env.STORAGE_PATH || path.join(__dirname, "../../data/uploads");
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024; // 100MB
 const FILE_RETENTION_DAYS = parseInt(process.env.FILE_RETENTION_DAYS) || 30;
 
@@ -27,15 +28,15 @@ const FILE_RETENTION_DAYS = parseInt(process.env.FILE_RETENTION_DAYS) || 30;
 export async function ensureDirectories() {
   const dirs = [
     STORAGE_PATH,
-    path.join(__dirname, '../../data'),
-    path.join(__dirname, '../../logs')
+    path.join(__dirname, "../../data"),
+    path.join(__dirname, "../../logs"),
   ];
 
   for (const dir of dirs) {
     try {
       await fs.mkdir(dir, { recursive: true });
     } catch (error) {
-      if (error.code !== 'EEXIST') {
+      if (error.code !== "EEXIST") {
         throw error;
       }
     }
@@ -47,8 +48,8 @@ export async function ensureDirectories() {
  */
 function generateUniqueFilename(originalFilename) {
   const timestamp = Date.now();
-  const random = crypto.randomBytes(8).toString('hex');
-  const extension = path.extname(originalFilename) || '.enc';
+  const random = crypto.randomBytes(8).toString("hex");
+  const extension = path.extname(originalFilename) || ".enc";
   return `${timestamp}-${random}${extension}`;
 }
 
@@ -63,7 +64,9 @@ export async function saveFile(fileBuffer, originalFilename, metadata = {}) {
   try {
     // Validate file size
     if (fileBuffer.length > MAX_FILE_SIZE) {
-      throw new Error(`File size ${fileBuffer.length} exceeds maximum ${MAX_FILE_SIZE}`);
+      throw new Error(
+        `File size ${fileBuffer.length} exceeds maximum ${MAX_FILE_SIZE}`,
+      );
     }
 
     // Generate unique filename
@@ -76,7 +79,7 @@ export async function saveFile(fileBuffer, originalFilename, metadata = {}) {
     // Verify file was written correctly
     const stats = await fs.stat(filePath);
     if (stats.size !== fileBuffer.length) {
-      throw new Error('File write verification failed');
+      throw new Error("File write verification failed");
     }
 
     console.log(`💾 Saved file: ${filename} (${fileBuffer.length} bytes)`);
@@ -85,11 +88,10 @@ export async function saveFile(fileBuffer, originalFilename, metadata = {}) {
       filename,
       path: filePath,
       size: fileBuffer.length,
-      savedAt: new Date().toISOString()
+      savedAt: new Date().toISOString(),
     };
-
   } catch (error) {
-    console.error('Failed to save file:', error);
+    console.error("Failed to save file:", error);
     throw error;
   }
 }
@@ -108,12 +110,11 @@ export async function readFile(filename) {
     const buffer = await fs.readFile(filePath);
 
     return buffer;
-
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      throw new Error('File not found');
+    if (error.code === "ENOENT") {
+      throw new Error("File not found");
     }
-    console.error('Failed to read file:', error);
+    console.error("Failed to read file:", error);
     throw error;
   }
 }
@@ -128,11 +129,11 @@ export async function deleteFile(filename) {
     console.log(`🗑️  Deleted file: ${filename}`);
     return true;
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    if (error.code === "ENOENT") {
       console.warn(`File not found for deletion: ${filename}`);
       return false;
     }
-    console.error('Failed to delete file:', error);
+    console.error("Failed to delete file:", error);
     throw error;
   }
 }
@@ -151,11 +152,10 @@ export async function getFileMetadata(filename) {
       size: stats.size,
       createdAt: stats.birthtime,
       modifiedAt: stats.mtime,
-      exists: true
+      exists: true,
     };
-
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    if (error.code === "ENOENT") {
       return { filename, exists: false };
     }
     throw error;
@@ -191,9 +191,8 @@ export async function cleanupOldFiles() {
 
     console.log(`🧹 Cleanup completed: ${deletedCount} old files removed`);
     return deletedCount;
-
   } catch (error) {
-    console.error('Failed to cleanup old files:', error);
+    console.error("Failed to cleanup old files:", error);
     throw error;
   }
 }
@@ -220,11 +219,10 @@ export async function getStorageStats() {
       totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
       storagePath: STORAGE_PATH,
       maxFileSizeMB: (MAX_FILE_SIZE / (1024 * 1024)).toFixed(2),
-      retentionDays: FILE_RETENTION_DAYS
+      retentionDays: FILE_RETENTION_DAYS,
     };
-
   } catch (error) {
-    console.error('Failed to get storage stats:', error);
+    console.error("Failed to get storage stats:", error);
     throw error;
   }
 }
@@ -262,24 +260,23 @@ export async function healthCheck() {
     await fs.access(STORAGE_PATH);
 
     // Test write access
-    const testFile = path.join(STORAGE_PATH, '.health-check');
-    await fs.writeFile(testFile, 'test');
+    const testFile = path.join(STORAGE_PATH, ".health-check");
+    await fs.writeFile(testFile, "test");
     await fs.unlink(testFile);
 
     // Get storage stats
     const stats = await getStorageStats();
 
     return {
-      status: 'healthy',
-      storage: 'accessible',
-      stats
+      status: "healthy",
+      storage: "accessible",
+      stats,
     };
-
   } catch (error) {
     return {
-      status: 'unhealthy',
-      storage: 'inaccessible',
-      error: error.message
+      status: "unhealthy",
+      storage: "inaccessible",
+      error: error.message,
     };
   }
 }

@@ -29,7 +29,7 @@ import { initEmailService } from "./services/email.js";
 import { ensureDirectories } from "./services/file-storage.js";
 
 // Configuration
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || "localhost";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
@@ -62,20 +62,22 @@ app.use(
 // CORS configuration
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",")
+      : ["http://localhost:5173", "http://127.0.0.1:5173"],
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
 );
 
-// Rate limiting - disable for development
+// Rate limiting - use environment variables
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 1000, // 1000 requests per minute
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 100 requests per window
   message: {
     error: "Too many requests from this IP, please try again later.",
-    retryAfter: 60,
+    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -83,13 +85,13 @@ const limiter = rateLimit({
 
 app.use("/api/", limiter);
 
-// Stricter rate limiting for sensitive endpoints - relaxed for development
+// Stricter rate limiting for sensitive endpoints
 const strictLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
+  windowMs: parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000, // 5 seconds default
+  max: parseInt(process.env.OTP_MAX_ATTEMPTS) || 3, // 3 attempts per cooldown period
   message: {
-    error: "Too many sensitive requests, please try again later.",
-    retryAfter: 60,
+    error: "Too many OTP attempts, please try again later.",
+    retryAfter: Math.ceil((parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000) / 1000),
   },
 });
 
@@ -209,7 +211,7 @@ app.use((error, req, res, next) => {
 
 async function startServer() {
   try {
-    console.log("🚀 Starting Secure File Server (Phase B)...");
+    console.log("🚀 Starting Secure File Server...");
 
     // Ensure required directories exist
     await ensureDirectories();

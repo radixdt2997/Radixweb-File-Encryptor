@@ -5,8 +5,8 @@
  * Uses separate email channels for enhanced security.
  */
 
-import nodemailer from 'nodemailer';
-import { emailMock } from '../config.js';
+import nodemailer from "nodemailer";
+import { emailMock } from "../config.js";
 
 // ============================================================================
 // EMAIL CONFIGURATION
@@ -21,15 +21,15 @@ let transporter = null;
  * Mock email sender for development
  */
 async function mockSendMail(mailOptions) {
-  console.log('📧 [MOCK EMAIL] - Would send email:');
-  console.log('   To:', mailOptions.to);
-  console.log('   Subject:', mailOptions.subject);
-  console.log('   From:', mailOptions.from);
-  console.log('   Body preview:', mailOptions.text?.substring(0, 100) + '...');
+  console.log("📧 [MOCK EMAIL] - Would send email:");
+  console.log("   To:", mailOptions.to);
+  console.log("   Subject:", mailOptions.subject);
+  console.log("   From:", mailOptions.from);
+  console.log("   Body preview:", mailOptions.text?.substring(0, 100) + "...");
 
   return {
     messageId: `mock-${Date.now()}`,
-    mock: true
+    mock: true,
   };
 }
 
@@ -37,26 +37,31 @@ export async function initEmailService() {
   const emailService = process.env.EMAIL_SERVICE;
   const emailHost = process.env.EMAIL_HOST;
   const emailPort = parseInt(process.env.EMAIL_PORT) || 587;
-  const emailSecure = process.env.EMAIL_SECURE === 'true';
+  const emailSecure = process.env.EMAIL_SECURE === "true";
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
 
   // For development, allow mock email service
-  const useMockEmail = emailMock.enabled || process.env.NODE_ENV === 'development';
+  const useMockEmail =
+    emailMock.enabled || process.env.NODE_ENV === "development";
 
   if (useMockEmail) {
-    console.log('📧 Using mock email service (development mode)');
-    console.log('💡 Set USE_MOCK_EMAIL=false and configure real email credentials for production');
+    console.log("📧 Using mock email service (development mode)");
+    console.log(
+      "💡 Set USE_MOCK_EMAIL=false and configure real email credentials for production",
+    );
     transporter = {
       sendMail: mockSendMail,
-      verify: () => Promise.resolve(true)
+      verify: () => Promise.resolve(true),
     };
     return true;
   }
 
   // Check if email is configured
   if (!emailUser || !emailPass) {
-    throw new Error('Email service not configured. Set EMAIL_USER and EMAIL_PASS environment variables.');
+    throw new Error(
+      "Email service not configured. Set EMAIL_USER and EMAIL_PASS environment variables.",
+    );
   }
 
   // Create transporter
@@ -67,21 +72,21 @@ export async function initEmailService() {
     secure: emailSecure,
     auth: {
       user: emailUser,
-      pass: emailPass
+      pass: emailPass,
     },
     // Additional security options
     tls: {
-      rejectUnauthorized: false  // For development only
-    }
+      rejectUnauthorized: false, // For development only
+    },
   });
 
   // Verify connection
   try {
     await transporter.verify();
-    console.log('✅ Email service connected');
+    console.log("✅ Email service connected");
     return true;
   } catch (error) {
-    console.error('❌ Email service verification failed:', error.message);
+    console.error("❌ Email service verification failed:", error.message);
     throw error;
   }
 }
@@ -102,13 +107,13 @@ export function isEmailConfigured() {
  */
 export async function sendDownloadLinkEmail(recipientEmail, data) {
   if (!isEmailConfigured()) {
-    throw new Error('Email service not initialized');
+    throw new Error("Email service not initialized");
   }
 
   const { fileName, fileSize, downloadUrl, expiryMinutes } = data;
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || 'noreply@radixweb.com',
+    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
     to: recipientEmail,
     subject: `Secure file shared with you - ${fileName}`,
     html: `
@@ -178,15 +183,17 @@ Security Notice: This file is encrypted end-to-end. Your password is never sent 
 ---
 Radixweb Secure File Encryptor
 All encryption happens in your browser. Zero-knowledge security.
-    `
+    `,
   };
 
   try {
     const result = await transporter.sendMail(mailOptions);
-    console.log(`📧 Download link email sent to ${recipientEmail}: ${result.messageId}`);
+    console.log(
+      `📧 Download link email sent to ${recipientEmail}: ${result.messageId}`,
+    );
     return result;
   } catch (error) {
-    console.error('Failed to send download link email:', error);
+    console.error("Failed to send download link email:", error);
     throw error;
   }
 }
@@ -196,7 +203,7 @@ All encryption happens in your browser. Zero-knowledge security.
  */
 export async function sendOTPEmail(recipientEmail, data) {
   if (!isEmailConfigured()) {
-    throw new Error('Email service not initialized');
+    throw new Error("Email service not initialized");
   }
 
   const { fileName, downloadUrl, expiryMinutes, otp } = data;
@@ -204,9 +211,9 @@ export async function sendOTPEmail(recipientEmail, data) {
   console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || 'noreply@radixweb.com',
+    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
     to: recipientEmail,
-    subject: 'Your one-time password for secure file delivery',
+    subject: "Your one-time password for secure file delivery",
     html: `
 <!DOCTYPE html>
 <html>
@@ -281,7 +288,7 @@ Next Steps:
 ---
 Radixweb Secure File Encryptor
 If you did not expect this email, please ignore it.
-    `
+    `,
   };
 
   try {
@@ -289,7 +296,7 @@ If you did not expect this email, please ignore it.
     console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
     return result;
   } catch (error) {
-    console.error('Failed to send OTP email:', error);
+    console.error("Failed to send OTP email:", error);
     throw error;
   }
 }
@@ -303,15 +310,15 @@ If you did not expect this email, please ignore it.
  */
 export async function sendTestEmail(recipientEmail) {
   if (!isEmailConfigured()) {
-    throw new Error('Email service not initialized');
+    throw new Error("Email service not initialized");
   }
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || 'noreply@radixweb.com',
+    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
     to: recipientEmail,
-    subject: 'Secure File Server - Test Email',
-    text: 'This is a test email from your Secure File Server. Email service is working correctly!',
-    html: '<h1>Test Email</h1><p>This is a test email from your Secure File Server. Email service is working correctly!</p>'
+    subject: "Secure File Server - Test Email",
+    text: "This is a test email from your Secure File Server. Email service is working correctly!",
+    html: "<h1>Test Email</h1><p>This is a test email from your Secure File Server. Email service is working correctly!</p>",
   };
 
   try {
@@ -319,7 +326,7 @@ export async function sendTestEmail(recipientEmail) {
     console.log(`🧪 Test email sent to ${recipientEmail}: ${result.messageId}`);
     return result;
   } catch (error) {
-    console.error('Failed to send test email:', error);
+    console.error("Failed to send test email:", error);
     throw error;
   }
 }
