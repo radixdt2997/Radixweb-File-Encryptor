@@ -59,6 +59,23 @@ npm start
 4. Browser unwraps key and downloads encrypted file
 5. File decrypted locally in browser
 
+### 🔐 Two-Channel Security Model
+
+The system uses **separate emails** for download link and OTP code as a security best practice:
+
+**Why Two Emails?**
+- **Defense against email compromise** - Single intercepted email cannot access file
+- **Out-of-band authentication** - Industry standard for banking/2FA systems
+- **Defense in depth** - Multiple security layers reduce attack surface
+- **Zero-trust principle** - No single communication channel is fully trusted
+
+**Email Delivery:**
+- **Email 1**: Download link only (no sensitive data)
+- **Email 2**: OTP code only (expires in 5 minutes)
+- **Requirement**: Both emails needed to decrypt file
+
+This approach follows security best practices where even if one email account is compromised, the attacker still cannot access the encrypted file without both pieces of information.
+
 ## Usage Modes
 
 ### 🚀 Send File
