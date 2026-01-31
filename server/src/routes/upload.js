@@ -33,6 +33,10 @@ const uploadValidation = [
     .matches(/^[A-Za-z0-9+/=]{44}$/) // SHA-256 base64 is always 44 chars
     .withMessage("Valid OTP hash is required"),
 
+  body("otp")
+    .matches(/^[0-9]{6}$/)
+    .withMessage("Valid 6-digit OTP is required"),
+
   body("expiryMinutes")
     .isInt({ min: 5, max: 1440 }) // 5 minutes to 24 hours
     .withMessage("Expiry minutes must be between 5 and 1440"),
@@ -137,8 +141,7 @@ router.post("/", uploadValidation, async (req, res) => {
     console.log("[UPLOAD] DB record created:", recordId);
 
     // Generate download URL
-    const baseUrl =
-      process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const baseUrl = process.env.BASE_URL || 'http://localhost:5173';
     const downloadUrl = `${baseUrl}?fileId=${fileId}`;
 
     // Log successful upload
@@ -157,8 +160,9 @@ router.post("/", uploadValidation, async (req, res) => {
       fileSize: fileResult.size,
       downloadUrl,
       expiryMinutes,
+      otp: req.body.otp, // Pass the OTP from frontend
     };
-    console.log("[UPLOAD] fileBody for email:", fileBody);
+    console.log("[UPLOAD] fileBody for email:", { ...fileBody, otp: '[REDACTED]' });
 
     // Send emails asynchronously (don't block response)
     setImmediate(async () => {

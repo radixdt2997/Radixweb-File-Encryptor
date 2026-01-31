@@ -156,10 +156,10 @@ router.post('/', otpValidation, async (req, res) => {
       processingTimeMs: Date.now() - startTime
     });
 
-    // Return the wrapped key data
+    // Return the wrapped key data (convert binary to base64)
     res.status(200).json({
-      wrappedKey: file.wrapped_key,
-      wrappedKeySalt: file.wrapped_key_salt,
+      wrappedKey: Buffer.from(file.wrapped_key).toString('base64'),
+      wrappedKeySalt: Buffer.from(file.wrapped_key_salt).toString('base64'),
       fileName: file.file_name,
       fileSize: file.file_size,
       verifiedAt: new Date().toISOString()
@@ -171,7 +171,7 @@ router.post('/', otpValidation, async (req, res) => {
     console.error('OTP verification error:', error);
 
     // Log error (without sensitive details)
-    await logAuditEvent(req.body.fileId, 'otp_error', req.ip, req.get('User-Agent'), {
+    await logAuditEvent(req.body.fileId || 'unknown', 'otp_failed', req.ip, req.get('User-Agent'), {
       error: error.message,
       processingTimeMs: Date.now() - startTime
     });

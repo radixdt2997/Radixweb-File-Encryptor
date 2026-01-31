@@ -65,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_recipients_email ON recipients(email);
 -- Audit logs table: comprehensive logging of all operations
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-  file_id TEXT REFERENCES files(id) ON DELETE SET NULL,
+  file_id TEXT REFERENCES files(file_id) ON DELETE SET NULL,
   event_type TEXT NOT NULL CHECK (event_type IN ('upload', 'otp_requested', 'otp_verified', 'otp_failed', 'download', 'expired', 'deleted')),
   ip_address TEXT,
   user_agent TEXT,

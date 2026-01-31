@@ -199,15 +199,9 @@ export async function sendOTPEmail(recipientEmail, data) {
     throw new Error('Email service not initialized');
   }
 
-  const { fileName, downloadUrl, expiryMinutes } = data;
+  const { fileName, downloadUrl, expiryMinutes, otp } = data;
 
-  // Generate a 6-digit OTP (this would normally come from client)
-  // For now, we'll generate it here, but in production this should come from the client
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  // TODO: In production, the OTP should be passed from the client
-  // For now, we'll log it for testing
-  console.log(`🔐 OTP for ${recipientEmail}: ${otp} (log this for testing only)`);
+  console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
 
   const mailOptions = {
     from: process.env.EMAIL_FROM || 'noreply@radixweb.com',
@@ -293,7 +287,7 @@ If you did not expect this email, please ignore it.
   try {
     const result = await transporter.sendMail(mailOptions);
     console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
-    return { result, otp };  // Return OTP for testing (remove in production)
+    return result;
   } catch (error) {
     console.error('Failed to send OTP email:', error);
     throw error;

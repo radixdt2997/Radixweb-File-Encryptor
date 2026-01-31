@@ -44,7 +44,7 @@ router.get('/:fileId', metadataValidation, async (req, res) => {
     // Retrieve file record
     const file = await getFileById(fileId);
     if (!file) {
-      await logAuditEvent(fileId, 'metadata_accessed', clientIP, userAgent, {
+      await logAuditEvent(fileId, 'otp_requested', clientIP, userAgent, {
         found: false
       });
 
@@ -56,7 +56,7 @@ router.get('/:fileId', metadataValidation, async (req, res) => {
 
     // Check if file is expired
     if (await isFileExpired(fileId)) {
-      await logAuditEvent(fileId, 'metadata_accessed', clientIP, userAgent, {
+      await logAuditEvent(fileId, 'otp_requested', clientIP, userAgent, {
         found: true,
         expired: true,
         expiryTime: file.expiry_time
@@ -69,7 +69,7 @@ router.get('/:fileId', metadataValidation, async (req, res) => {
     }
 
     // Log metadata access (for analytics)
-    await logAuditEvent(fileId, 'metadata_accessed', clientIP, userAgent, {
+    await logAuditEvent(fileId, 'otp_requested', clientIP, userAgent, {
       found: true,
       fileName: file.file_name,
       fileSize: file.file_size,

@@ -47,7 +47,7 @@ router.get('/:fileId', downloadValidation, async (req, res) => {
     // Retrieve file record
     const file = await getFileById(fileId);
     if (!file) {
-      await logAuditEvent(fileId, 'download_failed', clientIP, userAgent, {
+      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
         reason: 'file_not_found'
       });
 
@@ -59,7 +59,7 @@ router.get('/:fileId', downloadValidation, async (req, res) => {
 
     // Check if file is expired
     if (await isFileExpired(fileId)) {
-      await logAuditEvent(fileId, 'download_failed', clientIP, userAgent, {
+      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
         reason: 'file_expired',
         expiryTime: file.expiry_time
       });
@@ -72,7 +72,7 @@ router.get('/:fileId', downloadValidation, async (req, res) => {
 
     // Check if one-time file was already downloaded
     if (file.expiry_type === 'one-time' && file.status === 'used') {
-      await logAuditEvent(fileId, 'download_failed', clientIP, userAgent, {
+      await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
         reason: 'already_used'
       });
 

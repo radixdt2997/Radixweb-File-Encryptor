@@ -38,15 +38,14 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# Server data
+./server/data/*
+
 # Implementation/Documentation (one-time reference only)
 COMPLETION_REPORT.md
 IMPLEMENTATION_SUMMARY.md
 *.txt
 
-# Server placeholder (not needed until backend phase)
-secure-file-app/server/
-
 # Temporary files
 *.tmp
 *.bak
-.temp/
