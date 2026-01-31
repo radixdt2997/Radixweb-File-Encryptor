@@ -94,7 +94,7 @@ export async function initEmailService() {
 /**
  * Check if email service is configured
  */
-export function isEmailConfigured() {
+function isEmailConfigured() {
   return transporter !== null;
 }
 

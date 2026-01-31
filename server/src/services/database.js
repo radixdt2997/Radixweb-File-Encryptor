@@ -21,7 +21,15 @@ const USE_SQLITE =
 // SQLite database instance
 let db = null;
 if (USE_SQLITE) {
-  db = new Database("secure_files.db");
+  const dbPath = path.join(__dirname, "../../data/secure-files.db");
+
+  // Ensure data directory exists
+  const dataDir = path.dirname(dbPath);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  db = new Database(dbPath);
 
   // Create tables
   db.exec(`
