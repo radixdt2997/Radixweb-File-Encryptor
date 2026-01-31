@@ -380,17 +380,6 @@ export async function logAuditEvent(
 }
 
 /**
- * Get database instance (for compatibility)
- */
-export function getDatabase() {
-  if (USE_SQLITE) {
-    return db;
-  } else {
-    return { files, auditLogs };
-  }
-}
-
-/**
  * Close database connection
  */
 export function closeDatabase() {

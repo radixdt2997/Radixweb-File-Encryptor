@@ -24,7 +24,7 @@ import uploadRoutes from "./routes/upload.js";
 import verifyRoutes from "./routes/verify-otp.js";
 
 // Services
-import { initDatabase } from "./services/database.js";
+import { closeDatabase, initDatabase } from "./services/database.js";
 import { initEmailService } from "./services/email.js";
 import { ensureDirectories } from "./services/file-storage.js";
 
@@ -245,11 +245,13 @@ async function startServer() {
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("🛑 SIGTERM received, shutting down gracefully");
+  closeDatabase();
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
   console.log("🛑 SIGINT received, shutting down gracefully");
+  closeDatabase();
   process.exit(0);
 });
 

@@ -14,12 +14,13 @@ dotenv.config();
 // SERVER CONFIGURATION
 // ============================================================================
 
-export const server = {
+const port = parseInt(process.env.PORT) || 3000;
+
+const server = {
   nodeEnv: process.env.NODE_ENV || "development",
-  port: parseInt(process.env.PORT) || 3000,
+  port,
   host: process.env.HOST || "localhost",
-  baseUrl:
-    process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+  baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
 };
 
 // ============================================================================
