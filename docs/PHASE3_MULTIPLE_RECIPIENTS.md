@@ -1,9 +1,11 @@
 # Phase 3: Multiple Recipients Support
 
 ## Overview
+
 Extend the secure file delivery system to support multiple recipients with individual OTPs while maintaining zero-knowledge security principles.
 
 ## Current Limitations
+
 - Single recipient per file upload
 - One OTP per file
 - No recipient management
@@ -14,6 +16,7 @@ Extend the secure file delivery system to support multiple recipients with indiv
 ### Database Schema Changes
 
 #### New `recipients` Table
+
 ```sql
 CREATE TABLE recipients (
   id TEXT PRIMARY KEY,
@@ -31,10 +34,11 @@ CREATE TABLE recipients (
 ```
 
 #### Modified `files` Table
+
 ```sql
 -- Remove single recipient fields:
 -- recipient_email (moved to recipients table)
--- otp_hash (moved to recipients table)  
+-- otp_hash (moved to recipients table)
 -- wrapped_key (moved to recipients table)
 -- wrapped_key_salt (moved to recipients table)
 
@@ -47,6 +51,7 @@ ALTER TABLE files ADD COLUMN downloaded_recipients INTEGER DEFAULT 0;
 ### API Changes
 
 #### Upload Endpoint
+
 ```typescript
 POST /api/upload
 {
@@ -59,6 +64,7 @@ POST /api/upload
 ```
 
 #### New Recipient Management
+
 ```typescript
 GET /api/files/:fileId/recipients     // List recipients (sender only)
 DELETE /api/files/:fileId/recipients/:recipientId  // Revoke access
@@ -67,16 +73,19 @@ DELETE /api/files/:fileId/recipients/:recipientId  // Revoke access
 ### Security Model
 
 #### Individual OTP Generation
+
 - Each recipient gets unique 6-digit OTP
 - File encryption key wrapped separately for each recipient
 - No shared secrets between recipients
 
 #### Access Control
+
 - Each recipient can only access their own wrapped key
 - OTP verification tied to specific recipient
 - Independent download tracking per recipient
 
 #### Audit Trail
+
 ```sql
 CREATE TABLE recipient_audit_logs (
   id TEXT PRIMARY KEY,
@@ -93,28 +102,33 @@ CREATE TABLE recipient_audit_logs (
 ## Implementation Plan
 
 ### Phase 3.1: Database Migration
+
 - [ ] Create recipients table
 - [ ] Migrate existing single-recipient data
 - [ ] Update database service functions
 - [ ] Add recipient-specific queries
 
 ### Phase 3.2: Backend API Updates
+
 - [ ] Modify upload endpoint for multiple emails
 - [ ] Update OTP verification for recipient-specific validation
 - [ ] Add recipient management endpoints
 - [ ] Implement per-recipient audit logging
 
 ### Phase 3.3: Crypto Layer Updates
+
 - [ ] Generate unique OTP per recipient
 - [ ] Wrap file key individually for each recipient
 - [ ] Update unwrap logic for recipient-specific keys
 
 ### Phase 3.4: Email Service Updates
+
 - [ ] Batch email sending for multiple recipients
 - [ ] Recipient-specific email templates
 - [ ] Individual OTP delivery tracking
 
 ### Phase 3.5: Frontend Updates
+
 - [ ] Multiple email input UI
 - [ ] Recipient management interface
 - [ ] Per-recipient status tracking
@@ -122,39 +136,46 @@ CREATE TABLE recipient_audit_logs (
 ## Security Considerations
 
 ### Zero-Knowledge Principles
+
 - Server never sees plaintext file or OTPs
 - Each recipient's access is cryptographically isolated
 - File key wrapped independently per recipient
 
 ### Attack Mitigation
+
 - **Recipient Enumeration**: Rate limit recipient queries
 - **OTP Brute Force**: Individual attempt limits per recipient
 - **Access Revocation**: Immediate key invalidation
 - **Audit Logging**: Complete recipient activity tracking
 
 ### Privacy Protection
+
 - Recipients cannot see other recipients
 - Individual access patterns isolated
 - No cross-recipient information leakage
 
 ## Backward Compatibility
+
 - Existing single-recipient files continue to work
 - Migration script for legacy data
 - API versioning for gradual transition
 
 ## Performance Considerations
+
 - Batch operations for multiple recipients
 - Efficient database queries with proper indexing
 - Async email sending to prevent blocking
 - Pagination for large recipient lists
 
 ## Testing Strategy
+
 - Unit tests for multi-recipient crypto operations
 - Integration tests for email delivery
 - Security tests for access isolation
 - Performance tests for large recipient counts
 
 ## Deployment Plan
+
 1. Database migration (backward compatible)
 2. Backend API deployment with feature flags
 3. Frontend updates with progressive enhancement
@@ -162,6 +183,7 @@ CREATE TABLE recipient_audit_logs (
 5. Legacy cleanup after validation
 
 ## Success Metrics
+
 - Support for 1-100 recipients per file
 - Maintained security isolation between recipients
 - Zero performance degradation for single recipients
