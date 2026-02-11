@@ -8,7 +8,12 @@
 import crypto from "crypto";
 import express from "express";
 import { body, validationResult } from "express-validator";
-import { createFileRecord, logAuditEvent } from "../services/database.js";
+import {
+  createFileRecord,
+  createRecipientRecord,
+  logAuditEvent,
+  logRecipientAuditEvent,
+} from "../services/database.js";
 import { sendDownloadLinkEmail, sendOTPEmail } from "../services/email.js";
 import { saveFile } from "../services/file-storage.js";
 
@@ -140,6 +145,15 @@ router.post("/", uploadValidation, async (req, res) => {
     });
     console.log("[UPLOAD] DB record created:", recordId);
 
+    // Create initial recipient record (Phase 3 - multi-recipient ready)
+    const recipientId = await createRecipientRecord({
+      fileId,
+      email: recipientEmail,
+      otpHash,
+      wrappedKey: wrappedKeyBuffer.toString("base64"),
+      wrappedKeySalt: wrappedKeySaltBuffer.toString("base64"),
+    });
+
     // Generate download URL
     const baseUrl = process.env.BASE_URL || "http://localhost:5173";
     const downloadUrl = `${baseUrl}?fileId=${fileId}`;
@@ -175,6 +189,18 @@ router.post("/", uploadValidation, async (req, res) => {
 
         // Send OTP email (separate channel for security)
         await sendOTPEmail(recipientEmail, fileBody);
+
+        // Per-recipient audit logging
+        await logRecipientAuditEvent(
+          fileId,
+          recipientId,
+          "otp_sent",
+          req.ip,
+          req.get("User-Agent"),
+          {
+            email: recipientEmail,
+          },
+        );
 
         console.log(`📧 Emails sent for file ${fileId}`);
       } catch (emailError) {

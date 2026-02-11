@@ -103,35 +103,35 @@ CREATE TABLE recipient_audit_logs (
 
 ### Phase 3.1: Database Migration
 
-- [ ] Create recipients table
-- [ ] Migrate existing single-recipient data
-- [ ] Update database service functions
-- [ ] Add recipient-specific queries
+- [x] Create recipients table
+- [x] Migrate existing single-recipient data
+- [x] Update database service functions
+- [x] Add recipient-specific queries
 
 ### Phase 3.2: Backend API Updates
 
-- [ ] Modify upload endpoint for multiple emails
-- [ ] Update OTP verification for recipient-specific validation
-- [ ] Add recipient management endpoints
-- [ ] Implement per-recipient audit logging
+- [x] Modify upload endpoint for multiple emails
+- [x] Update OTP verification for recipient-specific validation
+- [x] Add recipient management endpoints
+- [x] Implement per-recipient audit logging
 
 ### Phase 3.3: Crypto Layer Updates
 
-- [ ] Generate unique OTP per recipient
-- [ ] Wrap file key individually for each recipient
-- [ ] Update unwrap logic for recipient-specific keys
+- [x] Generate unique OTP per recipient
+- [x] Wrap file key individually for each recipient
+- [x] Update unwrap logic for recipient-specific keys
 
 ### Phase 3.4: Email Service Updates
 
-- [ ] Batch email sending for multiple recipients
-- [ ] Recipient-specific email templates
-- [ ] Individual OTP delivery tracking
+- [x] Batch email sending for multiple recipients
+- [x] Recipient-specific email templates
+- [x] Individual OTP delivery tracking
 
 ### Phase 3.5: Frontend Updates
 
-- [ ] Multiple email input UI
-- [ ] Recipient management interface
-- [ ] Per-recipient status tracking
+- [x] Multiple email input UI
+- [x] Recipient management interface
+- [x] Per-recipient status tracking
 
 ## Security Considerations
 

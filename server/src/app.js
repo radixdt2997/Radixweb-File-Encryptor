@@ -22,6 +22,7 @@ import metadataRoutes from "./routes/metadata.js";
 import testEmailRoutes from "./routes/test-email.js";
 import uploadRoutes from "./routes/upload.js";
 import verifyRoutes from "./routes/verify-otp.js";
+import recipientsRoutes from "./routes/recipients.js";
 
 // Services
 import { closeDatabase, initDatabase } from "./services/database.js";
@@ -164,6 +165,9 @@ app.use("/api/download", downloadRoutes);
 
 // File metadata
 app.use("/api/metadata", metadataRoutes);
+
+// Recipient management
+app.use("/api/files", recipientsRoutes);
 
 // ============================================================================
 // ERROR HANDLING

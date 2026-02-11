@@ -4,6 +4,8 @@ import { api } from "../api/client";
 import { crypto } from "../utils/crypto";
 import { downloadFile, formatFileSize } from "../utils/file";
 
+const RADIX_EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@radixweb\.com$/;
+
 interface RecipientProps {
   fileId: string | null;
   onMessage: (text: string, type: "info" | "success" | "error") => void;
@@ -14,6 +16,7 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState("");
 
   useEffect(() => {
     if (fileId && !state.loaded) {
@@ -41,14 +44,27 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
     setOtp(value);
   };
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRecipientEmail(e.target.value.trim());
+  };
+
   const handleVerifyAndDownload = async () => {
     if (!fileId || otp.length !== 6) return;
+
+    if (!RADIX_EMAIL_REGEX.test(recipientEmail)) {
+      onMessage("Only @radixweb.com emails are allowed", "error");
+      return;
+    }
 
     try {
       setLoading(true);
       onMessage("Verifying OTP...", "info");
 
-      const verifyData = await api.verifyOTP(fileId, otp);
+      const verifyData = await api.verifyOTP(
+        fileId,
+        otp,
+        recipientEmail || undefined,
+      );
 
       const wrappedKey = new Uint8Array(
         atob(verifyData.wrappedKey)
@@ -79,6 +95,7 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
 
   const handleReset = () => {
     setOtp("");
+    setRecipientEmail("");
     setMetadata(null);
     setState({ fileId: state.fileId, loaded: false });
     onMessage("Reset complete", "info");
@@ -101,6 +118,14 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
           </span>
         </div>
       </div>
+
+      <input
+        type="email"
+        value={recipientEmail}
+        onChange={handleEmailChange}
+        placeholder="Your email (for multi-recipient files)"
+        className="block w-full p-2 bg-gray-700 text-white rounded"
+      />
 
       <input
         type="text"

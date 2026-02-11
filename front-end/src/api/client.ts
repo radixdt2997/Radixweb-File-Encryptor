@@ -1,4 +1,9 @@
-import type { FileMetadata, UploadResult, VerifyOTPResult } from "../types";
+import type {
+  FileMetadata,
+  RecipientInfo,
+  UploadResult,
+  VerifyOTPResult,
+} from "../types";
 
 const API_BASE = "http://localhost:3000/api";
 
@@ -21,11 +26,17 @@ export const api = {
     return response.json();
   },
 
-  async verifyOTP(fileId: string, otp: string): Promise<VerifyOTPResult> {
+  async verifyOTP(
+    fileId: string,
+    otp: string,
+    recipientEmail?: string,
+  ): Promise<VerifyOTPResult> {
     const response = await fetch(`${API_BASE}/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileId, otp }),
+      body: JSON.stringify(
+        recipientEmail ? { fileId, otp, recipientEmail } : { fileId, otp },
+      ),
       credentials: "include",
     });
     if (!response.ok) throw new Error("OTP verification failed");
@@ -38,5 +49,25 @@ export const api = {
     });
     if (!response.ok) throw new Error("Download failed");
     return response.arrayBuffer();
+  },
+
+  async getRecipients(fileId: string): Promise<RecipientInfo[]> {
+    const response = await fetch(`${API_BASE}/files/${fileId}/recipients`, {
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error("Failed to load recipients");
+    const data = await response.json();
+    return data.recipients;
+  },
+
+  async revokeRecipient(fileId: string, recipientId: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE}/files/${fileId}/recipients/${recipientId}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
+    if (!response.ok) throw new Error("Failed to revoke recipient");
   },
 };

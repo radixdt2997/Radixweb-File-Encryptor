@@ -10,9 +10,12 @@ import express from "express";
 import { body, validationResult } from "express-validator";
 import {
   getFileById,
+  getRecipientByFileAndEmail,
   incrementOTPAttempts,
+  incrementRecipientOTPAttempts,
   isFileExpired,
   logAuditEvent,
+  logRecipientAuditEvent,
 } from "../services/database.js";
 
 const router = express.Router();
@@ -31,6 +34,11 @@ const otpValidation = [
   body("otp")
     .matches(/^[0-9]{6}$/)
     .withMessage("OTP must be exactly 6 digits"),
+  body("recipientEmail")
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Valid recipient email is required when provided"),
 ];
 
 // ============================================================================
@@ -51,7 +59,7 @@ router.post("/", otpValidation, async (req, res) => {
       });
     }
 
-    const { fileId, otp } = req.body;
+    const { fileId, otp, recipientEmail } = req.body;
     const clientIP = req.ip;
     const userAgent = req.get("User-Agent");
 
@@ -95,13 +103,78 @@ router.post("/", otpValidation, async (req, res) => {
       });
     }
 
+    // Determine whether to use recipient-specific verification (Phase 3)
+    let otpContext = {
+      otpAttempts: file.otp_attempts,
+      lastAttemptAt: file.last_attempt_at,
+      otpHash: file.otp_hash,
+      wrappedKey: file.wrapped_key,
+      wrappedKeySalt: file.wrapped_key_salt,
+      mode: "file",
+      recipientId: null,
+      email: null,
+    };
+
+    if (recipientEmail) {
+      const recipient = await getRecipientByFileAndEmail(fileId, recipientEmail);
+      if (!recipient) {
+        await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
+          reason: "recipient_not_found",
+          email: recipientEmail,
+        });
+
+        await logRecipientAuditEvent(
+          fileId,
+          "unknown",
+          "otp_failed",
+          clientIP,
+          userAgent,
+          {
+            reason: "recipient_not_found",
+            email: recipientEmail,
+          },
+        );
+
+        return res.status(400).json({
+          error: "Invalid Recipient",
+          message: "Recipient not found for this file",
+        });
+      }
+
+      otpContext = {
+        otpAttempts: recipient.otp_attempts,
+        lastAttemptAt: recipient.last_attempt_at,
+        otpHash: recipient.otp_hash,
+        wrappedKey: recipient.wrapped_key,
+        wrappedKeySalt: recipient.wrapped_key_salt,
+        mode: "recipient",
+        recipientId: recipient.id,
+        email: recipient.email,
+      };
+    }
+
     // Check attempt limits
     const maxAttempts = parseInt(process.env.OTP_MAX_ATTEMPTS) || 3;
-    if (file.otp_attempts >= maxAttempts) {
+    if (otpContext.otpAttempts >= maxAttempts) {
       await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
         reason: "too_many_attempts",
-        attempts: file.otp_attempts,
+        attempts: otpContext.otpAttempts,
+        scope: otpContext.mode,
       });
+
+      if (otpContext.mode === "recipient" && otpContext.recipientId) {
+        await logRecipientAuditEvent(
+          fileId,
+          otpContext.recipientId,
+          "otp_failed",
+          clientIP,
+          userAgent,
+          {
+            reason: "too_many_attempts",
+            attempts: otpContext.otpAttempts,
+          },
+        );
+      }
 
       return res.status(400).json({
         error: "Too Many Attempts",
@@ -111,8 +184,8 @@ router.post("/", otpValidation, async (req, res) => {
 
     // Check cooldown between attempts
     const cooldownMs = parseInt(process.env.OTP_COOLDOWN_MS) || 5000; // 5 seconds default
-    if (file.last_attempt_at) {
-      const lastAttempt = new Date(file.last_attempt_at);
+    if (otpContext.lastAttemptAt) {
+      const lastAttempt = new Date(otpContext.lastAttemptAt);
       const timeSinceLastAttempt = Date.now() - lastAttempt.getTime();
 
       if (timeSinceLastAttempt < cooldownMs) {
@@ -123,7 +196,22 @@ router.post("/", otpValidation, async (req, res) => {
         await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
           reason: "cooldown_active",
           remainingSeconds: remainingCooldown,
+          scope: otpContext.mode,
         });
+
+        if (otpContext.mode === "recipient" && otpContext.recipientId) {
+          await logRecipientAuditEvent(
+            fileId,
+            otpContext.recipientId,
+            "otp_failed",
+            clientIP,
+            userAgent,
+            {
+              reason: "cooldown_active",
+              remainingSeconds: remainingCooldown,
+            },
+          );
+        }
 
         return res.status(429).json({
           error: "Too Many Attempts",
@@ -133,7 +221,13 @@ router.post("/", otpValidation, async (req, res) => {
     }
 
     // Increment attempt counter
-    await incrementOTPAttempts(fileId);
+    if (otpContext.mode === "recipient" && otpContext.recipientId) {
+      await incrementRecipientOTPAttempts(otpContext.recipientId);
+      otpContext.otpAttempts += 1;
+    } else {
+      await incrementOTPAttempts(fileId);
+      otpContext.otpAttempts += 1;
+    }
 
     // Hash the provided OTP (timing attack protection)
     const providedOtpHash = crypto
@@ -142,7 +236,7 @@ router.post("/", otpValidation, async (req, res) => {
       .digest("base64");
 
     // Constant-time comparison to prevent timing attacks
-    const storedHash = file.otp_hash;
+    const storedHash = otpContext.otpHash;
     const isValidOTP = crypto.timingSafeEqual(
       Buffer.from(providedOtpHash, "base64"),
       Buffer.from(storedHash, "base64"),
@@ -152,26 +246,57 @@ router.post("/", otpValidation, async (req, res) => {
       // Log failed attempt
       await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
         reason: "invalid_otp",
-        attempts: file.otp_attempts + 1,
+        attempts: otpContext.otpAttempts,
+        scope: otpContext.mode,
       });
+
+      if (otpContext.mode === "recipient" && otpContext.recipientId) {
+        await logRecipientAuditEvent(
+          fileId,
+          otpContext.recipientId,
+          "otp_failed",
+          clientIP,
+          userAgent,
+          {
+            reason: "invalid_otp",
+            attempts: otpContext.otpAttempts,
+          },
+        );
+      }
 
       return res.status(400).json({
         error: "Invalid OTP",
         message: "The provided OTP is incorrect",
-        attemptsRemaining: Math.max(0, maxAttempts - (file.otp_attempts + 1)),
+        attemptsRemaining: Math.max(0, maxAttempts - otpContext.otpAttempts),
       });
     }
 
     // OTP is valid! Log success and return wrapped key
     await logAuditEvent(fileId, "otp_verified", clientIP, userAgent, {
-      attempts: file.otp_attempts + 1,
+      attempts: otpContext.otpAttempts,
       processingTimeMs: Date.now() - startTime,
+      scope: otpContext.mode,
     });
+
+    if (otpContext.mode === "recipient" && otpContext.recipientId) {
+      await logRecipientAuditEvent(
+        fileId,
+        otpContext.recipientId,
+        "otp_verified",
+        clientIP,
+        userAgent,
+        {
+          attempts: otpContext.otpAttempts,
+          processingTimeMs: Date.now() - startTime,
+          email: otpContext.email,
+        },
+      );
+    }
 
     // Return the wrapped key data (convert binary to base64)
     res.status(200).json({
-      wrappedKey: Buffer.from(file.wrapped_key).toString("base64"),
-      wrappedKeySalt: Buffer.from(file.wrapped_key_salt).toString("base64"),
+      wrappedKey: Buffer.from(otpContext.wrappedKey).toString("base64"),
+      wrappedKeySalt: Buffer.from(otpContext.wrappedKeySalt).toString("base64"),
       fileName: file.file_name,
       fileSize: file.file_size,
       verifiedAt: new Date().toISOString(),

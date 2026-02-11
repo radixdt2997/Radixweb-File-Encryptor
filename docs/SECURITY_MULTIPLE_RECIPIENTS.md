@@ -179,9 +179,9 @@ app.post("/api/upload", (req, res) => {
 
 ### Database Security
 
-- [ ] Foreign key constraints prevent orphaned recipients
+- [x] Foreign key constraints prevent orphaned recipients
 - [ ] Indexes on sensitive fields (email, file_id) for performance
-- [ ] No plaintext OTPs stored anywhere
+- [x] No plaintext OTPs stored anywhere
 - [ ] Audit logs for all recipient operations
 - [ ] Proper data encryption at rest
 
@@ -189,29 +189,29 @@ app.post("/api/upload", (req, res) => {
 
 - [ ] Input validation on all recipient endpoints
 - [ ] Rate limiting per IP and per user
-- [ ] CORS properly configured for recipient operations
+- [x] CORS properly configured for recipient operations
 - [ ] Authentication required for sender operations
 - [ ] Authorization checks for recipient access
 
 ### Cryptographic Security
 
-- [ ] Unique salt per recipient key derivation
-- [ ] Secure random OTP generation (crypto.getRandomValues)
-- [ ] Proper key wrapping with authenticated encryption
-- [ ] No key reuse between recipients
+- [x] Unique salt per recipient key derivation
+- [x] Secure random OTP generation (crypto.getRandomValues)
+- [x] Proper key wrapping with authenticated encryption
+- [x] No key reuse between recipients
 - [ ] Secure key deletion after use
-- [ ] **Each recipient receives unique OTP (never shared)**
-- [ ] **File key wrapped separately for each recipient with their unique OTP**
+- [x] **Each recipient receives unique OTP (never shared)**
+- [x] **File key wrapped separately for each recipient with their unique OTP**
 
 ### Email Security
 
-- [ ] Separate email channels maintained (link + OTP)
-- [ ] No recipient list in email headers
-- [ ] Individual email sending (no CC/BCC)
-- [ ] Email delivery failure handling
+- [x] Separate email channels maintained (link + OTP)
+- [x] No recipient list in email headers
+- [x] Individual email sending (no CC/BCC)
+- [x] Email delivery failure handling
 - [ ] Bounce/undeliverable tracking
-- [ ] Domain whitelist enforced (@radixweb.com only)
-- [ ] Email validation on both frontend and backend
+- [x] Domain whitelist enforced (@radixweb.com only)
+- [x] Email validation on both frontend and backend
 
 ## Monitoring & Alerting
 

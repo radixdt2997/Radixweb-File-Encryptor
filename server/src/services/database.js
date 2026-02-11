@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 
 config();
 
@@ -64,11 +65,115 @@ if (USE_SQLITE) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
+
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS recipients (
+            id TEXT PRIMARY KEY,
+            file_id TEXT NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
+            email TEXT NOT NULL,
+            otp_hash TEXT NOT NULL,
+            wrapped_key TEXT NOT NULL,
+            wrapped_key_salt TEXT NOT NULL,
+            otp_verified_at DATETIME,
+            downloaded_at DATETIME,
+            otp_attempts INTEGER DEFAULT 0,
+            last_attempt_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS recipient_audit_logs (
+            id TEXT PRIMARY KEY,
+            file_id TEXT NOT NULL,
+            recipient_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+  // Ensure new recipient-related columns exist on files table (idempotent)
+  function ensureColumnExists(tableName, columnName, columnDef) {
+    const infoStmt = db.prepare(`PRAGMA table_info(${tableName})`);
+    const columns = infoStmt.all();
+    const exists = columns.some((col) => col.name === columnName);
+    if (!exists) {
+      db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+    }
+  }
+
+  ensureColumnExists("files", "total_recipients", "INTEGER DEFAULT 1");
+  ensureColumnExists("files", "verified_recipients", "INTEGER DEFAULT 0");
+  ensureColumnExists("files", "downloaded_recipients", "INTEGER DEFAULT 0");
+
+  // One-time migration: move legacy single-recipient data into recipients table
+  const filesToMigrateStmt = db.prepare(`
+        SELECT * FROM files
+        WHERE recipient_email IS NOT NULL
+          AND file_id NOT IN (SELECT DISTINCT file_id FROM recipients)
+    `);
+
+  const legacyFiles = filesToMigrateStmt.all();
+
+  if (legacyFiles.length > 0) {
+    const insertRecipientStmt = db.prepare(`
+            INSERT INTO recipients (
+                id,
+                file_id,
+                email,
+                otp_hash,
+                wrapped_key,
+                wrapped_key_salt,
+                otp_verified_at,
+                downloaded_at,
+                otp_attempts,
+                last_attempt_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+    const updateFileCountersStmt = db.prepare(`
+            UPDATE files
+            SET total_recipients = 1,
+                verified_recipients = CASE WHEN downloaded_at IS NOT NULL THEN 1 ELSE 0 END,
+                downloaded_recipients = CASE WHEN downloaded_at IS NOT NULL THEN 1 ELSE 0 END
+            WHERE file_id = ?
+        `);
+
+    const migrateTxn = db.transaction((rows) => {
+      for (const file of rows) {
+        const recipientId = uuidv4();
+
+        insertRecipientStmt.run(
+          recipientId,
+          file.file_id,
+          file.recipient_email,
+          file.otp_hash,
+          file.wrapped_key,
+          file.wrapped_key_salt,
+          null, // otp_verified_at - unknown for legacy, keep null
+          file.downloaded_at || null,
+          file.otp_attempts ?? 0,
+          file.last_attempt_at || null,
+          file.created_at || new Date().toISOString(),
+        );
+
+        updateFileCountersStmt.run(file.file_id);
+      }
+    });
+
+    migrateTxn(legacyFiles);
+  }
 }
 
 // In-memory storage for development
 const files = new Map();
 const auditLogs = [];
+const recipients = new Map(); // recipientId -> recipient record
+const recipientAuditLogs = [];
 
 /**
  * Initialize database
@@ -349,6 +454,166 @@ export async function updateFileRecord(fileId, updates) {
 }
 
 /**
+ * Create a recipient record
+ */
+export async function createRecipientRecord(data) {
+  const {
+    id = uuidv4(),
+    fileId,
+    email,
+    otpHash,
+    wrappedKey,
+    wrappedKeySalt,
+    otpVerifiedAt = null,
+    downloadedAt = null,
+    otpAttempts = 0,
+    lastAttemptAt = null,
+  } = data;
+
+  const createdAt = new Date().toISOString();
+
+  if (USE_SQLITE) {
+    const stmt = db.prepare(`
+      INSERT INTO recipients (
+        id,
+        file_id,
+        email,
+        otp_hash,
+        wrapped_key,
+        wrapped_key_salt,
+        otp_verified_at,
+        downloaded_at,
+        otp_attempts,
+        last_attempt_at,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      fileId,
+      email,
+      otpHash,
+      wrappedKey,
+      wrappedKeySalt,
+      otpVerifiedAt,
+      downloadedAt,
+      otpAttempts,
+      lastAttemptAt,
+      createdAt,
+    );
+  } else {
+    const record = {
+      id,
+      file_id: fileId,
+      email,
+      otp_hash: otpHash,
+      wrapped_key: wrappedKey,
+      wrapped_key_salt: wrappedKeySalt,
+      otp_verified_at: otpVerifiedAt,
+      downloaded_at: downloadedAt,
+      otp_attempts: otpAttempts,
+      last_attempt_at: lastAttemptAt,
+      created_at: createdAt,
+    };
+    recipients.set(id, record);
+  }
+
+  return id;
+}
+
+/**
+ * Get all recipients for a file
+ */
+export async function getRecipientsByFileId(fileId) {
+  if (USE_SQLITE) {
+    const stmt = db.prepare(
+      "SELECT * FROM recipients WHERE file_id = ? ORDER BY created_at ASC",
+    );
+    return stmt.all(fileId);
+  } else {
+    return Array.from(recipients.values()).filter(
+      (r) => r.file_id === fileId,
+    );
+  }
+}
+
+/**
+ * Get recipient by fileId and email
+ */
+export async function getRecipientByFileAndEmail(fileId, email) {
+  if (USE_SQLITE) {
+    const stmt = db.prepare(
+      "SELECT * FROM recipients WHERE file_id = ? AND email = ?",
+    );
+    return stmt.get(fileId, email) || null;
+  } else {
+    return (
+      Array.from(recipients.values()).find(
+        (r) => r.file_id === fileId && r.email === email,
+      ) || null
+    );
+  }
+}
+
+/**
+ * Update recipient record
+ */
+export async function updateRecipientRecord(recipientId, updates) {
+  if (USE_SQLITE) {
+    const fields = Object.keys(updates)
+      .map((key) => `${key} = ?`)
+      .join(", ");
+    const values = Object.values(updates);
+    const stmt = db.prepare(
+      `UPDATE recipients SET ${fields} WHERE id = ?`,
+    );
+    stmt.run(...values, recipientId);
+  } else {
+    const recipient = recipients.get(recipientId);
+    if (!recipient) return;
+    Object.assign(recipient, updates);
+    recipients.set(recipientId, recipient);
+  }
+}
+
+/**
+ * Delete recipient (used for access revocation)
+ */
+export async function deleteRecipient(fileId, recipientId) {
+  if (USE_SQLITE) {
+    const stmt = db.prepare(
+      "DELETE FROM recipients WHERE id = ? AND file_id = ?",
+    );
+    stmt.run(recipientId, fileId);
+  } else {
+    const recipient = recipients.get(recipientId);
+    if (!recipient || recipient.file_id !== fileId) return;
+    recipients.delete(recipientId);
+  }
+}
+
+/**
+ * Increment recipient OTP attempts counter
+ */
+export async function incrementRecipientOTPAttempts(recipientId) {
+  if (USE_SQLITE) {
+    const stmt = db.prepare(`
+      UPDATE recipients 
+      SET otp_attempts = otp_attempts + 1, last_attempt_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `);
+    stmt.run(recipientId);
+  } else {
+    const recipient = recipients.get(recipientId);
+    if (!recipient) return;
+    recipient.otp_attempts = (recipient.otp_attempts || 0) + 1;
+    recipient.last_attempt_at = new Date().toISOString();
+    recipients.set(recipientId, recipient);
+  }
+}
+
+/**
  * Log audit event
  */
 export async function logAuditEvent(
@@ -376,6 +641,55 @@ export async function logAuditEvent(
     };
 
     auditLogs.push(logEntry);
+  }
+}
+
+/**
+ * Log recipient audit event
+ */
+export async function logRecipientAuditEvent(
+  fileId,
+  recipientId,
+  eventType,
+  ipAddress,
+  userAgent,
+  details = {},
+) {
+  if (USE_SQLITE) {
+    const stmt = db.prepare(`
+      INSERT INTO recipient_audit_logs (
+        id,
+        file_id,
+        recipient_id,
+        event_type,
+        ip_address,
+        user_agent,
+        details
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      uuidv4(),
+      fileId,
+      recipientId,
+      eventType,
+      ipAddress,
+      userAgent,
+      JSON.stringify(details),
+    );
+  } else {
+    const logEntry = {
+      id: uuidv4(),
+      file_id: fileId,
+      recipient_id: recipientId,
+      event_type: eventType,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      details: JSON.stringify(details),
+      created_at: new Date().toISOString(),
+    };
+
+    recipientAuditLogs.push(logEntry);
   }
 }
 
