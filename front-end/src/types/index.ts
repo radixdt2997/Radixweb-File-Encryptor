@@ -22,6 +22,15 @@ export interface VerifyOTPResult {
   verifiedAt: string;
 }
 
+export interface RecipientInfo {
+  id: string;
+  email: string;
+  otpAttempts: number;
+  createdAt: string;
+  downloadedAt: string | null;
+  otpVerifiedAt: string | null;
+}
+
 export interface SenderState {
   file: File | null;
   key: CryptoKey | null;
@@ -32,5 +41,5 @@ export interface RecipientState {
   loaded: boolean;
 }
 
-export type TabType = 'sender' | 'recipient' | 'legacy';
-export type MessageType = 'info' | 'success' | 'error';
+export type TabType = "sender" | "recipient" | "legacy";
+export type MessageType = "info" | "success" | "error";

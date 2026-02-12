@@ -12,6 +12,9 @@ import {
   isFileExpired,
   logAuditEvent,
   updateFileStatus,
+  getRecipientsByFileId,
+  updateRecipientRecord,
+  logRecipientAuditEvent,
 } from "../services/database.js";
 import { readFile } from "../services/file-storage.js";
 
@@ -99,9 +102,35 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
       });
     }
 
+    // Update all recipients' download timestamps (per-recipient audit)
+    const recipients = await getRecipientsByFileId(fileId);
+    const now = new Date().toISOString();
+    for (const recipient of recipients) {
+      if (!recipient.downloaded_at) {
+        await updateRecipientRecord(recipient.id, {
+          downloaded_at: now,
+        });
+
+        await logRecipientAuditEvent(
+          fileId,
+          recipient.id,
+          "download",
+          clientIP,
+          userAgent,
+          {
+            email: recipient.email,
+            fileSize: fileBuffer.length,
+            expiryType: file.expiry_type,
+            processingTimeMs: Date.now() - startTime,
+          },
+        );
+      }
+    }
+
     // Log successful download
     await logAuditEvent(fileId, "download", clientIP, userAgent, {
       fileSize: fileBuffer.length,
+      recipientCount: recipients.length,
       processingTimeMs: Date.now() - startTime,
     });
 

@@ -8,11 +8,17 @@
 import crypto from "crypto";
 import express from "express";
 import { body, validationResult } from "express-validator";
-import { createFileRecord, logAuditEvent } from "../services/database.js";
+import {
+  createFileRecord,
+  createRecipientRecord,
+  logAuditEvent,
+  logRecipientAuditEvent,
+} from "../services/database.js";
 import { sendDownloadLinkEmail, sendOTPEmail } from "../services/email.js";
 import { saveFile } from "../services/file-storage.js";
 
 const router = express.Router();
+const RADIX_EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@radixweb\.com$/;
 
 // ============================================================================
 // INPUT VALIDATION
@@ -24,16 +30,20 @@ const uploadValidation = [
     .isLength({ min: 1, max: 255 })
     .withMessage("File name is required and must be less than 255 characters"),
 
+  // Legacy single-recipient fields (optional in Phase 3)
   body("recipientEmail")
+    .optional()
     .isEmail()
     .normalizeEmail()
     .withMessage("Valid recipient email is required"),
 
   body("otpHash")
+    .optional()
     .matches(/^[A-Za-z0-9+/=]{44}$/) // SHA-256 base64 is always 44 chars
     .withMessage("Valid OTP hash is required"),
 
   body("otp")
+    .optional()
     .matches(/^[0-9]{6}$/)
     .withMessage("Valid 6-digit OTP is required"),
 
@@ -44,6 +54,33 @@ const uploadValidation = [
   body("expiryType")
     .isIn(["one-time", "time-based"])
     .withMessage('Expiry type must be "one-time" or "time-based"'),
+
+  // New: recipients JSON payload (optional but validated if present)
+  body("recipients")
+    .optional()
+    .custom((value) => {
+      try {
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          throw new Error("Recipients must be a non-empty array");
+        }
+        for (const r of parsed) {
+          if (
+            !r.email ||
+            !r.otpHash ||
+            !r.wrappedKey ||
+            !r.wrappedKeySalt
+          ) {
+            throw new Error(
+              "Each recipient must include email, otpHash, wrappedKey, wrappedKeySalt",
+            );
+          }
+        }
+        return true;
+      } catch (err) {
+        throw new Error("Invalid recipients payload");
+      }
+    }),
 ];
 
 // ============================================================================
@@ -53,6 +90,7 @@ const uploadValidation = [
 router.post("/", uploadValidation, async (req, res) => {
   console.log("[UPLOAD] Handler entered");
   const startTime = Date.now();
+  let fileId = null;
 
   // Check validation errors
   const errors = validationResult(req);
@@ -69,8 +107,7 @@ router.post("/", uploadValidation, async (req, res) => {
 
   try {
     // Extract and validate request data
-    const { fileName, recipientEmail, otpHash, expiryMinutes, expiryType } =
-      req.body;
+    const { fileName, expiryMinutes, expiryType } = req.body;
     console.log("[UPLOAD] Request body:", req.body);
 
     // Check if files were uploaded
@@ -110,35 +147,94 @@ router.post("/", uploadValidation, async (req, res) => {
     }
 
     // Generate unique file ID
-    const fileId = crypto.randomUUID();
+    fileId = crypto.randomUUID();
     console.log("[UPLOAD] Generated fileId:", fileId);
 
     // Save encrypted file to storage
-    const fileResult = await saveFile(encryptedDataFile.buffer, fileName, {
-      recipientEmail,
-      expiryMinutes,
-      expiryType,
-    });
+    const fileResult = await saveFile(
+      encryptedDataFile.buffer,
+      fileName,
+      {
+        expiryMinutes,
+        expiryType,
+      },
+    );
     console.log("[UPLOAD] File saved:", fileResult);
 
     // Extract binary data from uploaded files
     const wrappedKeyBuffer = wrappedKeyFile.buffer;
     const wrappedKeySaltBuffer = wrappedKeySaltFile.buffer;
 
-    // Create database record
+    // Determine recipients payload (Phase 3 multi-recipient)
+    let recipientsPayload = [];
+
+    if (req.body.recipients) {
+      const parsed = JSON.parse(req.body.recipients);
+      recipientsPayload = parsed;
+    } else if (
+      req.body.recipientEmail &&
+      req.body.otp &&
+      req.body.otpHash
+    ) {
+      // Legacy single-recipient path
+      recipientsPayload = [
+        {
+          email: req.body.recipientEmail,
+          otp: req.body.otp,
+          otpHash: req.body.otpHash,
+          wrappedKey: Buffer.from(wrappedKeyBuffer).toString("base64"),
+          wrappedKeySalt: Buffer.from(wrappedKeySaltBuffer).toString("base64"),
+        },
+      ];
+    } else {
+      return res.status(400).json({
+        error: "Validation Error",
+        message: "At least one recipient is required",
+      });
+    }
+
+    // Backend domain whitelist enforcement
+    const invalidDomainRecipients = recipientsPayload.filter(
+      (r) => !RADIX_EMAIL_REGEX.test(r.email),
+    );
+    if (invalidDomainRecipients.length > 0) {
+      return res.status(400).json({
+        error: "Invalid email domain",
+        message: "Only @radixweb.com emails are allowed",
+        invalidEmails: invalidDomainRecipients.map((r) => r.email),
+      });
+    }
+
+    // Use first recipient's email for legacy files.recipient_email (NOT NULL)
+    const primaryRecipientEmail = recipientsPayload[0].email;
+
+    // Create database record (legacy fields kept for backward compatibility)
     const recordId = await createFileRecord({
       fileId,
       fileName,
       filePath: fileResult.filename, // Store relative path
       fileSize: fileResult.size,
-      recipientEmail,
+      recipientEmail: primaryRecipientEmail,
       wrappedKey: wrappedKeyBuffer,
       wrappedKeySalt: wrappedKeySaltBuffer,
-      otpHash,
+      otpHash: recipientsPayload[0].otpHash,
       expiryMinutes,
       expiryType,
     });
     console.log("[UPLOAD] DB record created:", recordId);
+
+    // Create per-recipient records
+    const recipientIds = [];
+    for (const recipient of recipientsPayload) {
+      const recipientId = await createRecipientRecord({
+        fileId,
+        email: recipient.email,
+        otpHash: recipient.otpHash,
+        wrappedKey: recipient.wrappedKey,
+        wrappedKeySalt: recipient.wrappedKeySalt,
+      });
+      recipientIds.push({ id: recipientId, email: recipient.email, otp: recipient.otp });
+    }
 
     // Generate download URL
     const baseUrl = process.env.BASE_URL || "http://localhost:5173";
@@ -148,19 +244,18 @@ router.post("/", uploadValidation, async (req, res) => {
     await logAuditEvent(fileId, "upload", req.ip, req.get("User-Agent"), {
       fileName,
       fileSize: fileResult.size,
-      recipientEmail,
+      recipientCount: recipientsPayload.length,
       expiryMinutes,
       expiryType,
       processingTimeMs: Date.now() - startTime,
     });
 
-    // Prepare fileBody for emails
+    // Prepare base fileBody for emails
     const fileBody = {
       fileName,
       fileSize: fileResult.size,
       downloadUrl,
       expiryMinutes,
-      otp: req.body.otp, // Pass the OTP from frontend
     };
     console.log("[UPLOAD] fileBody for email:", {
       ...fileBody,
@@ -170,11 +265,31 @@ router.post("/", uploadValidation, async (req, res) => {
     // Send emails asynchronously (don't block response)
     setImmediate(async () => {
       try {
-        // Send download link email
-        await sendDownloadLinkEmail(recipientEmail, fileBody);
+        // Send per-recipient emails
+        for (const recipient of recipientIds) {
+          const recipientFileBody = {
+            ...fileBody,
+            otp: recipient.otp,
+          };
 
-        // Send OTP email (separate channel for security)
-        await sendOTPEmail(recipientEmail, fileBody);
+          // Send download link email
+          await sendDownloadLinkEmail(recipient.email, recipientFileBody);
+
+          // Send OTP email (separate channel for security)
+          await sendOTPEmail(recipient.email, recipientFileBody);
+
+          // Per-recipient audit logging
+          await logRecipientAuditEvent(
+            fileId,
+            recipient.id,
+            "otp_sent",
+            req.ip,
+            req.get("User-Agent"),
+            {
+              email: recipient.email,
+            },
+          );
+        }
 
         console.log(`📧 Emails sent for file ${fileId}`);
       } catch (emailError) {
@@ -203,16 +318,22 @@ router.post("/", uploadValidation, async (req, res) => {
     });
 
     console.log(
-      `✅ File uploaded: ${fileId} (${fileResult.size} bytes) for ${recipientEmail}`,
+      `✅ File uploaded: ${fileId} (${fileResult.size} bytes) for ${primaryRecipientEmail}`,
     );
   } catch (error) {
     console.error("Upload error:", error);
 
     // Log failed upload
-    await logAuditEvent(null, "upload_failed", req.ip, req.get("User-Agent"), {
+    await logAuditEvent(
+      fileId || "unknown",
+      "upload_failed",
+      req.ip,
+      req.get("User-Agent"),
+      {
       error: error.message,
       processingTimeMs: Date.now() - startTime,
-    });
+      },
+    );
 
     res.status(500).json({
       error: "Upload Failed",

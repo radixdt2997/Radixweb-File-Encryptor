@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { TabType } from "./types";
 import { useMessage } from "./hooks/useMessage";
 import { Tabs } from "./components/Tabs";
-import { Message } from "./components/Message";
+import { Alert } from "./components/ui/Alert";
 import { Sender } from "./components/Sender";
 import { Recipient } from "./components/Recipient";
 import { Legacy } from "./components/Legacy";
+import { env } from "./config/env";
 
 function App() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -15,30 +16,82 @@ function App() {
     urlFileId ? "recipient" : "sender",
   );
   const [fileId] = useState<string | null>(urlFileId);
-  const { message, showMessage } = useMessage();
+  const { message, showMessage, clearMessage } = useMessage();
 
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-    showMessage(`Switched to ${tab} mode`, "info");
-  };
+  const handleTabChange = useCallback(
+    (tab: TabType) => {
+      setActiveTab(tab);
+      showMessage(`Switched to ${tab} mode`, "info");
+    },
+    [showMessage],
+  );
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-4xl mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-6">🔒 Secure File App</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
+      {/* Header */}
+      <header className="border-b border-gray-700 backdrop-blur-md bg-slate-900/50 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🔒</div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  Secure File App
+                </h1>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Zero-knowledge encrypted file sharing
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <Tabs activeTab={activeTab} onTabChange={handleTabChange} />
+      {/* Toast Container - Fixed Position */}
+      {message && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Alert
+            text={message.text}
+            type={message.type}
+            onClose={clearMessage}
+            autoClose={true}
+            duration={
+              message.type === "error"
+                ? env.toast.durationError
+                : env.toast.durationDefault
+            }
+          />
+        </div>
+      )}
 
-        {message && <Message text={message.text} type={message.type} />}
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        {/* Tabs */}
+        <Tabs
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          disabledTabs={fileId ? [] : ["recipient"]}
+        />
 
-        <div className="bg-gray-800 p-6 rounded-lg">
+        {/* Tab Content */}
+        <div className="animate-in fade-in duration-300">
           {activeTab === "sender" && <Sender onMessage={showMessage} />}
           {activeTab === "recipient" && (
             <Recipient fileId={fileId} onMessage={showMessage} />
           )}
           {activeTab === "legacy" && <Legacy onMessage={showMessage} />}
         </div>
-      </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-700 bg-slate-900/50 mt-16 py-6">
+        <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
+          <p>
+            🔐 All encryption happens client-side. Your files are never stored
+            unencrypted.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

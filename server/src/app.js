@@ -22,6 +22,7 @@ import metadataRoutes from "./routes/metadata.js";
 import testEmailRoutes from "./routes/test-email.js";
 import uploadRoutes from "./routes/upload.js";
 import verifyRoutes from "./routes/verify-otp.js";
+import recipientsRoutes from "./routes/recipients.js";
 
 // Services
 import { closeDatabase, initDatabase } from "./services/database.js";
@@ -65,7 +66,7 @@ app.use(
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",")
       : ["http://localhost:5173", "http://127.0.0.1:5173"],
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
@@ -77,7 +78,9 @@ const limiter = rateLimit({
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 100 requests per window
   message: {
     error: "Too many requests from this IP, please try again later.",
-    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000),
+    retryAfter: Math.ceil(
+      (parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000,
+    ),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -91,11 +94,63 @@ const strictLimiter = rateLimit({
   max: parseInt(process.env.OTP_MAX_ATTEMPTS) || 3, // 3 attempts per cooldown period
   message: {
     error: "Too many OTP attempts, please try again later.",
-    retryAfter: Math.ceil((parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000) / 1000),
+    retryAfter: Math.ceil(
+      (parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000) / 1000,
+    ),
   },
 });
 
 app.use("/api/verify-otp", strictLimiter);
+
+// Upload-specific limiter to protect file upload endpoint from abuse
+const uploadLimiter = rateLimit({
+  windowMs: parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS) || 20, // 20 uploads per window
+  message: {
+    error: "Too many uploads from this IP, please try again later.",
+    retryAfter: Math.ceil(
+      (parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) /
+        1000,
+    ),
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// File access limiter (metadata, download) to prevent enumeration and brute-force
+const fileAccessLimiter = rateLimit({
+  windowMs:
+    parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute
+  max: parseInt(process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS) || 30, // 30 file accesses per minute
+  message: {
+    error:
+      "Too many file access requests from this IP, please try again later.",
+    retryAfter: Math.ceil(
+      (parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS) ||
+        1 * 60 * 1000) / 1000,
+    ),
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Recipient list access limiter
+const recipientAccessLimiter = rateLimit({
+  windowMs:
+    parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS) ||
+    15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS) || 5, // 5 requests per window
+  message: {
+    error:
+      "Too many recipient access attempts from this IP, please try again later.",
+    retryAfter: Math.ceil(
+      (parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS) ||
+        15 * 60 * 1000) / 1000,
+    ),
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ============================================================================
 // GENERAL MIDDLEWARE
@@ -148,6 +203,7 @@ app.use("/api/test-email", testEmailRoutes);
 // File upload (with multiple file handling)
 app.use(
   "/api/upload",
+  uploadLimiter,
   upload.fields([
     { name: "encryptedData", maxCount: 1 },
     { name: "wrappedKey", maxCount: 1 },
@@ -159,11 +215,14 @@ app.use(
 // OTP verification
 app.use("/api/verify-otp", verifyRoutes);
 
-// File download
-app.use("/api/download", downloadRoutes);
+// File download (with rate limiting)
+app.use("/api/download", fileAccessLimiter, downloadRoutes);
 
-// File metadata
-app.use("/api/metadata", metadataRoutes);
+// File metadata (with rate limiting)
+app.use("/api/metadata", fileAccessLimiter, metadataRoutes);
+
+// Recipient management (with stricter rate limiting on access)
+app.use("/api/files", recipientAccessLimiter, recipientsRoutes);
 
 // ============================================================================
 // ERROR HANDLING
