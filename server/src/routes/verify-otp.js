@@ -293,10 +293,23 @@ router.post("/", otpValidation, async (req, res) => {
       );
     }
 
-    // Return the wrapped key data (convert binary to base64)
+    // Return the wrapped key data.
+    // For legacy file-level data, wrappedKey / wrappedKeySalt are Buffers.
+    // For multi-recipient data, they're already base64 strings.
+    const normalizeToBase64 = (value) => {
+      if (Buffer.isBuffer(value)) {
+        return value.toString("base64");
+      }
+      if (typeof value === "string") {
+        return value;
+      }
+      // Fallback for unexpected types
+      return Buffer.from(value).toString("base64");
+    };
+
     res.status(200).json({
-      wrappedKey: Buffer.from(otpContext.wrappedKey).toString("base64"),
-      wrappedKeySalt: Buffer.from(otpContext.wrappedKeySalt).toString("base64"),
+      wrappedKey: normalizeToBase64(otpContext.wrappedKey),
+      wrappedKeySalt: normalizeToBase64(otpContext.wrappedKeySalt),
       fileName: file.file_name,
       fileSize: file.file_size,
       verifiedAt: new Date().toISOString(),

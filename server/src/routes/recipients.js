@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  deleteRecipient,
   getRecipientsByFileId,
   logRecipientAuditEvent,
 } from "../services/database.js";
@@ -48,12 +49,6 @@ router.delete("/:fileId/recipients/:recipientId", async (req, res) => {
 
     // Hard delete recipient for now (simple revocation)
     // Note: future enhancement could use a 'revoked_at' field instead.
-    const { default: dbModule } = await import("../services/database.js");
-    // dbModule is not used directly; deletion is handled via raw SQL below
-
-    // Use dynamic import of better-sqlite3-based delete via a small helper
-    // to avoid exposing the db instance directly here.
-    const { deleteRecipient } = await import("../services/database.js");
     await deleteRecipient(fileId, recipientId);
 
     return res.status(200).json({
