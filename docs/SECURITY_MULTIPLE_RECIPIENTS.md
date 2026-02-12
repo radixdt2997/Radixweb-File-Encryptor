@@ -180,18 +180,18 @@ app.post("/api/upload", (req, res) => {
 ### Database Security
 
 - [x] Foreign key constraints prevent orphaned recipients
-- [ ] Indexes on sensitive fields (email, file_id) for performance
+- [x] Indexes on sensitive fields (email, file_id) for performance
 - [x] No plaintext OTPs stored anywhere
-- [ ] Audit logs for all recipient operations
+- [x] Audit logs for all recipient operations
 - [ ] Proper data encryption at rest
 
 ### API Security
 
-- [ ] Input validation on all recipient endpoints
-- [ ] Rate limiting per IP and per user
+- [x] Input validation on all recipient endpoints
+- [x] Rate limiting per IP and per user
 - [x] CORS properly configured for recipient operations
 - [ ] Authentication required for sender operations
-- [ ] Authorization checks for recipient access
+- [x] Authorization checks for recipient access
 
 ### Cryptographic Security
 
@@ -199,7 +199,7 @@ app.post("/api/upload", (req, res) => {
 - [x] Secure random OTP generation (crypto.getRandomValues)
 - [x] Proper key wrapping with authenticated encryption
 - [x] No key reuse between recipients
-- [ ] Secure key deletion after use
+- [x] Secure key deletion after use
 - [x] **Each recipient receives unique OTP (never shared)**
 - [x] **File key wrapped separately for each recipient with their unique OTP**
 

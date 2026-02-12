@@ -1,10 +1,21 @@
-import { useState, useEffect } from "react";
-import type { RecipientState, FileMetadata } from "../types";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
+import { env } from "../config/env";
+import type { FileMetadata, RecipientState } from "../types";
 import { crypto } from "../utils/crypto";
-import { downloadFile, formatFileSize } from "../utils/file";
+import {
+  downloadFile,
+  formatDate,
+  formatFileSize,
+  getTimeRemaining,
+} from "../utils/file";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Input } from "./ui/Input";
 
-const RADIX_EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@radixweb\.com$/;
+const RECIPIENT_EMAIL_REGEX = new RegExp(
+  `^[a-zA-Z0-9._%+-]+@${env.email.allowedDomain.replace(/\./g, "\\.")}$`,
+);
 
 interface RecipientProps {
   fileId: string | null;
@@ -24,41 +35,53 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
     }
   }, [fileId, state.loaded]);
 
-  const loadFileInfo = async (id: string) => {
-    if (state.loaded) return;
-    setState((prev) => ({ ...prev, loaded: true }));
+  const loadFileInfo = useCallback(
+    async (id: string) => {
+      if (state.loaded) return;
+      setState((prev) => ({ ...prev, loaded: true }));
 
-    try {
-      onMessage("Loading file info...", "info");
-      const data = await api.getFileMetadata(id);
-      setMetadata(data);
-      onMessage("Ready. Enter OTP.", "success");
-    } catch (error) {
-      onMessage(`Load failed: ${(error as Error).message}`, "error");
-      setState((prev) => ({ ...prev, loaded: false }));
+      try {
+        onMessage("📂 Loading file info...", "info");
+        const data = await api.getFileMetadata(id);
+        setMetadata(data);
+        onMessage("✓ Ready. Enter OTP to download.", "success");
+      } catch (error) {
+        onMessage(`✕ Load failed: ${(error as Error).message}`, "error");
+        setState((prev) => ({ ...prev, loaded: false }));
+      }
+    },
+    [state.loaded, onMessage],
+  );
+
+  const handleOtpChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+      setOtp(value);
+    },
+    [],
+  );
+
+  const handleEmailChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setRecipientEmail(e.target.value.trim());
+    },
+    [],
+  );
+
+  const emailError = useMemo(() => {
+    if (!recipientEmail) return "";
+    if (!RECIPIENT_EMAIL_REGEX.test(recipientEmail)) {
+      return `Email must be @${env.email.allowedDomain}`;
     }
-  };
+    return "";
+  }, [recipientEmail]);
 
-  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setOtp(value);
-  };
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRecipientEmail(e.target.value.trim());
-  };
-
-  const handleVerifyAndDownload = async () => {
-    if (!fileId || otp.length !== 6) return;
-
-    if (!RADIX_EMAIL_REGEX.test(recipientEmail)) {
-      onMessage("Only @radixweb.com emails are allowed", "error");
-      return;
-    }
+  const handleVerifyAndDownload = useCallback(async () => {
+    if (!fileId || otp.length !== 6 || emailError) return;
 
     try {
       setLoading(true);
-      onMessage("Verifying OTP...", "info");
+      onMessage("🔐 Verifying OTP...", "info");
 
       const verifyData = await api.verifyOTP(
         fileId,
@@ -78,10 +101,10 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
       );
       const fileKey = await crypto.unwrapKey(wrappedKey, wrappedKeySalt, otp);
 
-      onMessage("Downloading file...", "info");
+      onMessage("📥 Downloading file...", "info");
       const encryptedData = new Uint8Array(await api.downloadFile(fileId));
 
-      onMessage("Decrypting...", "info");
+      onMessage("🔓 Decrypting...", "info");
       const decryptedData = await crypto.decryptWithKey(encryptedData, fileKey);
 
       downloadFile(decryptedData, verifyData.fileName);
@@ -91,67 +114,105 @@ export const Recipient = ({ fileId, onMessage }: RecipientProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fileId, otp, recipientEmail, emailError, onMessage]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setOtp("");
     setRecipientEmail("");
     setMetadata(null);
     setState({ fileId: state.fileId, loaded: false });
-    onMessage("Reset complete", "info");
-  };
+    onMessage("↻ Reset complete", "info");
+  }, [state.fileId, onMessage]);
+
+  const timeRemaining = useMemo(() => {
+    if (!metadata) return "";
+    return getTimeRemaining(metadata.expiryTime);
+  }, [metadata]);
 
   return (
-    <div className="space-y-4">
-      <div className="bg-gray-700 p-4 rounded">
-        <div>
-          File: <span>{metadata?.fileName || "-"}</span>
-        </div>
-        <div>
-          Size:{" "}
-          <span>{metadata ? formatFileSize(metadata.fileSize) : "-"}</span>
-        </div>
-        <div>
-          Expires:{" "}
-          <span>
-            {metadata ? new Date(metadata.expiryTime).toLocaleString() : "-"}
-          </span>
-        </div>
-      </div>
-
-      <input
-        type="email"
-        value={recipientEmail}
-        onChange={handleEmailChange}
-        placeholder="Your email (for multi-recipient files)"
-        className="block w-full p-2 bg-gray-700 text-white rounded"
-      />
-
-      <input
-        type="text"
-        value={otp}
-        onChange={handleOtpChange}
-        placeholder="Enter 6-digit OTP"
-        maxLength={6}
-        className="block w-full p-2 bg-gray-700 text-white rounded"
-      />
-
-      <div className="space-x-2">
-        <button
-          onClick={handleVerifyAndDownload}
-          disabled={otp.length !== 6 || loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-600"
+    <div className="space-y-6 max-w-2xl">
+      {/* File Info Card */}
+      {metadata && (
+        <Card
+          title="📄 File Information"
+          subtitle={`Expires in: ${timeRemaining}`}
+          className="border-blue-600/50 bg-blue-950/20"
         >
-          Verify & Download
-        </button>
+          <div className="space-y-3">
+            <div className="bg-gray-800/50 p-3 rounded-lg">
+              <p className="text-xs text-gray-400 mb-1">File Name</p>
+              <p className="text-sm font-medium text-white break-all">
+                {metadata.fileName}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-800/50 p-3 rounded-lg">
+                <p className="text-xs text-gray-400 mb-1">Size</p>
+                <p className="text-sm font-medium text-white">
+                  {formatFileSize(metadata.fileSize)}
+                </p>
+              </div>
+              <div className="bg-gray-800/50 p-3 rounded-lg">
+                <p className="text-xs text-gray-400 mb-1">Expires</p>
+                <p className="text-sm font-medium text-white">
+                  {formatDate(metadata.expiryTime)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
-        <button
-          onClick={handleReset}
-          className="px-4 py-2 bg-gray-600 text-white rounded"
-        >
-          Reset
-        </button>
-      </div>
+      {/* Verification Form */}
+      <Card title="🔐 Verify & Download" className="border-cyan-600/50">
+        <div className="space-y-4">
+          <Input
+            type="email"
+            label="Your Email"
+            value={recipientEmail}
+            onChange={handleEmailChange}
+            placeholder="name@radixweb.com"
+            error={emailError}
+            hint="Multi-recipient files require your email for verification"
+            fullWidth
+          />
+
+          <Input
+            type="text"
+            label="6-Digit OTP"
+            value={otp}
+            onChange={handleOtpChange}
+            placeholder="000000"
+            maxLength={6}
+            error={
+              otp.length > 0 && otp.length < 6 ? "OTP must be 6 digits" : ""
+            }
+            hint={`${otp.length}/6 digits entered`}
+            fullWidth
+          />
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={handleVerifyAndDownload}
+              disabled={otp.length !== 6 || !!emailError || loading}
+              isLoading={loading}
+              fullWidth
+              variant="success"
+              size="lg"
+            >
+              Verify & Download
+            </Button>
+            <Button
+              onClick={handleReset}
+              variant="secondary"
+              fullWidth
+              size="lg"
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };

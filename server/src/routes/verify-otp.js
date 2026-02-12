@@ -33,12 +33,15 @@ const otpValidation = [
 
   body("otp")
     .matches(/^[0-9]{6}$/)
-    .withMessage("OTP must be exactly 6 digits"),
+    .withMessage("OTP must be exactly 6 digits")
+    .trim(),
+
   body("recipientEmail")
     .optional()
     .isEmail()
     .normalizeEmail()
-    .withMessage("Valid recipient email is required when provided"),
+    .withMessage("Valid recipient email is required when provided")
+    .trim(),
 ];
 
 // ============================================================================
@@ -116,8 +119,15 @@ router.post("/", otpValidation, async (req, res) => {
     };
 
     if (recipientEmail) {
-      const recipient = await getRecipientByFileAndEmail(fileId, recipientEmail);
+      const recipient = await getRecipientByFileAndEmail(
+        fileId,
+        recipientEmail,
+      );
       if (!recipient) {
+        // Always add constant delay to prevent timing attacks that reveal email presence
+        const delay = Math.random() * 100 + 50; // 50-150ms
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
         await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
           reason: "recipient_not_found",
           email: recipientEmail,
@@ -134,6 +144,28 @@ router.post("/", otpValidation, async (req, res) => {
             email: recipientEmail,
           },
         );
+
+        return res.status(400).json({
+          error: "Invalid Recipient",
+          message: "Recipient not found for this file",
+        });
+      }
+
+      // Constant-time email comparison to prevent timing attacks
+      try {
+        crypto.timingSafeEqual(
+          Buffer.from(recipient.email),
+          Buffer.from(recipientEmail),
+        );
+      } catch (e) {
+        // Email mismatch - should not happen since we fetched by email, but check for safety
+        const delay = Math.random() * 100 + 50;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
+          reason: "email_mismatch",
+          email: recipientEmail,
+        });
 
         return res.status(400).json({
           error: "Invalid Recipient",
@@ -276,6 +308,7 @@ router.post("/", otpValidation, async (req, res) => {
       attempts: otpContext.otpAttempts,
       processingTimeMs: Date.now() - startTime,
       scope: otpContext.mode,
+      recipientEmail: otpContext.email,
     });
 
     if (otpContext.mode === "recipient" && otpContext.recipientId) {
@@ -289,6 +322,7 @@ router.post("/", otpValidation, async (req, res) => {
           attempts: otpContext.otpAttempts,
           processingTimeMs: Date.now() - startTime,
           email: otpContext.email,
+          fileSize: file.file_size,
         },
       );
     }

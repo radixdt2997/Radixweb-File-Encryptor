@@ -167,6 +167,27 @@ if (USE_SQLITE) {
 
     migrateTxn(legacyFiles);
   }
+
+  // Create useful indexes to improve lookup performance on sensitive fields
+  try {
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_recipients_email ON recipients(email);
+      `);
+
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_recipients_file_id ON recipients(file_id);
+      `);
+
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_files_recipient_email ON files(recipient_email);
+      `);
+
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_file_id ON audit_logs(file_id);
+      `);
+  } catch (idxError) {
+    console.warn("⚠️  Failed to create indexes:", idxError.message);
+  }
 }
 
 // In-memory storage for development
@@ -532,9 +553,7 @@ export async function getRecipientsByFileId(fileId) {
     );
     return stmt.all(fileId);
   } else {
-    return Array.from(recipients.values()).filter(
-      (r) => r.file_id === fileId,
-    );
+    return Array.from(recipients.values()).filter((r) => r.file_id === fileId);
   }
 }
 
@@ -565,9 +584,7 @@ export async function updateRecipientRecord(recipientId, updates) {
       .map((key) => `${key} = ?`)
       .join(", ");
     const values = Object.values(updates);
-    const stmt = db.prepare(
-      `UPDATE recipients SET ${fields} WHERE id = ?`,
-    );
+    const stmt = db.prepare(`UPDATE recipients SET ${fields} WHERE id = ?`);
     stmt.run(...values, recipientId);
   } else {
     const recipient = recipients.get(recipientId);

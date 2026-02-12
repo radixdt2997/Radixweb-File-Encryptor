@@ -4,8 +4,9 @@ import type {
   UploadResult,
   VerifyOTPResult,
 } from "../types";
+import { env } from "../config/env";
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = env.api.baseUrl;
 
 export const api = {
   async uploadFile(formData: FormData): Promise<UploadResult> {
@@ -14,7 +15,12 @@ export const api = {
       body: formData,
       credentials: "include",
     });
-    if (!response.ok) throw new Error("Upload failed");
+    if (!response.ok) {
+      const error = await response.json();
+      const message =
+        error.details?.[0]?.msg || error.message || "Upload failed";
+      throw new Error(message);
+    }
     return response.json();
   },
 
