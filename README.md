@@ -1,6 +1,6 @@
 # 🔒 Secure File App
 
-A zero-knowledge file encryption and delivery system with passwordless sharing via OTP-based key wrapping.
+A zero-knowledge file encryption and delivery system with passwordless sharing via OTP-based key wrapping. Built with modern React, TypeScript, and Node.js for secure, user-friendly file sharing.
 
 ## Features
 
@@ -8,68 +8,101 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 ✅ **Passwordless Sharing** - Share files securely without passwords  
 ✅ **OTP-Based Security** - 6-digit codes for secure key unwrapping  
 ✅ **Zero-Knowledge** - Server never sees your files or keys  
-✅ **Modern Stack** - React TypeScript frontend + Node.js backend  
-✅ **Email Delivery** - Automatic link and OTP delivery
+✅ **Modern UI** - Professional Tailwind CSS interface with real-time validation  
+✅ **TypeScript Safety** - 100% type-safe frontend and backend  
+✅ **React Best Practices** - useCallback, useMemo, React.memo optimizations  
+✅ **Email Delivery** - Automatic link and OTP delivery via two-channel security  
+✅ **Environment Configuration** - Easy deployment across environments  
+✅ **Rate Limiting** - Built-in protection against abuse  
+✅ **Multi-Recipient Support** - Share with multiple recipients securely
 
 ## Quick Start
 
-### Frontend (React + TypeScript)
+### Prerequisites
+
+- Node.js 20.19+ or 22.12+
+- npm or pnpm
+- Email account (Gmail recommended) with App Password
+
+### Frontend (React + TypeScript + Tailwind)
 
 ```bash
 cd front-end
+
+# Setup
+cp .env.example .env.local
 npm install
+
+# Development
 npm run dev
 # Opens on http://localhost:5173
+
+# Build for production
+npm run build
 ```
 
-### Backend (Node.js + Express)
+### Backend (Node.js + Express + SQLite)
 
 ```bash
 cd server
+
+# Setup
+cp .env.example .env.development
 npm install
-cp .env.sample .env
-# Edit .env with your email credentials
-npm start
+
+# Development (with disabled rate limits for testing)
+npm run dev
 # Runs on http://localhost:3000
+
+# Production
+npm start
 ```
 
 ## How It Works
 
 ### 🔐 Security Model
 
-1. **File Encryption**: Files encrypted with random AES-256 keys in browser
-2. **Key Wrapping**: File keys wrapped with OTP-derived keys (PBKDF2)
-3. **Server Storage**: Only encrypted files and wrapped keys stored
-4. **Two-Channel Delivery**: Download link and OTP sent separately
-5. **Zero Knowledge**: Server cannot decrypt files without OTP
+1. **File Encryption**: Files encrypted with random AES-256-GCM keys in browser
+2. **Per-Recipient Key Wrapping**: Each recipient gets unique key wrapped with their OTP (PBKDF2, 250k iterations)
+3. **Server Storage**: Only encrypted files and wrapped keys stored on server
+4. **Two-Channel Delivery**: Download link and OTP sent via separate emails
+5. **Zero Knowledge**: Server cannot decrypt files without OTP from recipient
+6. **Timing Attack Prevention**: Constant-time comparisons on OTP verification
+7. **Rate Limiting**: Protection against brute force and abuse
 
-### 📤 Sending Files
+### 📤 Sending Files (Multi-Recipient)
 
-1. Select file and recipient email
-2. File encrypted locally with random key
-3. Key wrapped with generated OTP
-4. Upload encrypted file + wrapped key to server
-5. Recipient gets download link + OTP via email
+1. Select file and add recipient emails
+2. File encrypted locally with random AES-256 key
+3. For each recipient:
+   - Generate unique 6-digit OTP
+   - Wrap file key with OTP-derived key
+   - Hash OTP (SHA-256) for storage
+4. Upload encrypted file + all wrapped keys to server
+5. Recipients get download link + their OTP via separate emails
 
 ### 📥 Receiving Files
 
-1. Click download link from email
-2. Enter 6-digit OTP from separate email
-3. Server verifies OTP and returns wrapped key
-4. Browser unwraps key and downloads encrypted file
-5. File decrypted locally in browser
+1. Click download link from email (with fileId parameter)
+2. File info loads automatically (name, size, expiry)
+3. Enter 6-digit OTP from separate email
+4. Server verifies OTP and returns wrapped key
+5. Browser unwraps key and downloads encrypted file
+6. File decrypted locally in browser
 
 ### 🔐 Two-Channel Security Model
 
 The system uses **separate emails** for download link and OTP code as a security best practice:
 
 **Why Two Emails?**
+
 - **Defense against email compromise** - Single intercepted email cannot access file
 - **Out-of-band authentication** - Industry standard for banking/2FA systems
 - **Defense in depth** - Multiple security layers reduce attack surface
 - **Zero-trust principle** - No single communication channel is fully trusted
 
 **Email Delivery:**
+
 - **Email 1**: Download link only (no sensitive data)
 - **Email 2**: OTP code only (expires in 5 minutes)
 - **Requirement**: Both emails needed to decrypt file
@@ -108,40 +141,95 @@ GET  /api/health          # Health check
 
 ## Configuration
 
-### Environment Variables (.env)
+### Frontend Environment Variables (.env.local)
 
 ```bash
-# Server
-PORT=3000
-NODE_ENV=development
+# API Configuration
+VITE_API_BASE_URL=http://localhost:3000/api
 
-# Email (required for file sharing)
+# UI Settings
+VITE_DEFAULT_EXPIRY_MINUTES=60
+VITE_MIN_EXPIRY_MINUTES=5
+VITE_MAX_EXPIRY_MINUTES=1440
+
+# Email Validation
+VITE_ALLOWED_EMAIL_DOMAIN=radixweb.com
+
+# Encryption
+VITE_PBKDF2_ITERATIONS=250000
+
+# Debug Mode
+VITE_DEBUG_MODE=false
+```
+
+See `front-end/.env.example` and `front-end/ENV_CONFIGURATION.md` for complete configuration options.
+
+### Backend Environment Variables (.env.development)
+
+For **local development**, rate limits are disabled. Create `.env.development`:
+
+```bash
+# Rate limits DISABLED for local testing
+RATE_LIMIT_MAX_REQUESTS=999999
+OTP_MAX_ATTEMPTS=999999
+UPLOAD_RATE_LIMIT_MAX_REQUESTS=999999
+FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS=999999
+RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS=999999
+
+# Email Configuration (required)
 EMAIL_SERVICE=gmail
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
-EMAIL_FROM=noreply@yourcompany.com
 
-# Optional
-MAX_FILE_SIZE=104857600  # 100MB
-BASE_URL=http://localhost:5173
+# Server
+PORT=3000
+NODE_ENV=development
 ```
+
+For **production**, see `server/.env.example` for production rate limiting settings.
 
 ### Email Setup
 
 1. Enable 2FA on your Gmail account
-2. Generate an App Password
-3. Use App Password as EMAIL_PASS
-4. Or configure SMTP settings for other providers
+2. Generate an [App Password](https://support.google.com/accounts/answer/185833)
+3. Use the generated password as `EMAIL_PASS`
+4. Or configure SMTP for other email providers
 
 ## Security Features
 
-- **AES-GCM Encryption** (256-bit keys)
-- **PBKDF2 Key Derivation** (250k iterations)
-- **Cryptographically Secure Random** (Web Crypto API)
-- **Authenticated Encryption** (tamper detection)
-- **Rate Limiting** (prevents abuse)
-- **CORS Protection** (cross-origin security)
-- **Input Validation** (prevents injection attacks)
+### Encryption & Key Management
+
+- **AES-256-GCM Encryption** - 256-bit authenticated encryption with random IVs
+- **PBKDF2 Key Derivation** - 250,000 iterations for OTP key derivation
+- **Cryptographically Secure Random** - Web Crypto API for all random values
+- **Per-Recipient Wrapped Keys** - Each recipient has unique OTP-derived wrapping key
+- **SHA-256 OTP Hashing** - OTPs never stored plaintext, only hashed
+
+### Attack Prevention
+
+- **Timing Attack Protection** - Constant-time OTP comparison using crypto.timingSafeEqual
+- **Rate Limiting** - Multi-tiered protection:
+  - General: 100 requests/15 min
+  - OTP verification: 3 attempts/5 sec
+  - File uploads: 20/15 min
+  - File access: 30/1 min
+  - Recipient operations: 5/15 min
+- **Input Validation** - Express-validator on all endpoints
+- **CORS Protection** - Configurable allowed origins
+- **Security Headers** - Helmet.js for HTTP security headers
+
+### Database Security
+
+- **SQLite with Foreign Keys** - Referential integrity enforced
+- **Indexed Queries** - Performance optimization on sensitive fields
+- **Audit Logging** - Per-recipient and per-file access tracking
+- **Automatic Cleanup** - Expired files automatically removed
+
+### Infrastructure
+
+- **HTTPS Ready** - Set NODE_ENV=production for HSTS headers
+- **No Plaintext Storage** - Files and keys never stored unencrypted
+- **Two-Channel Security** - Download links and OTPs sent separately
 
 ## File Format
 
@@ -166,47 +254,36 @@ BASE_URL=http://localhost:5173
 
 Requires Web Crypto API support.
 
-## Development
+## Architecture & Code Quality
 
-### Project Structure
+### Frontend (React + TypeScript)
 
-```
-secure-file-app/
-├── front-end/          # React TypeScript SPA
-│   ├── src/
-│   │   ├── components/ # React components
-│   │   ├── api/        # API client
-│   │   ├── utils/      # Crypto utilities
-│   │   └── types/      # TypeScript types
-├── server/             # Node.js Express API
-│   ├── src/
-│   │   ├── routes/     # API endpoints
-│   │   ├── services/   # Business logic
-│   │   └── app.js      # Server entry
-└── shared/             # Shared configuration
-```
+- **100% TypeScript** - Strict mode, no `any` types
+- **React Hooks** - useState, useCallback, useMemo, useEffect
+- **Component Optimization** - React.memo on expensive components
+- **Memoized Callbacks** - All event handlers wrapped with useCallback
+- **Computed State** - Email validation cached with useMemo
+- **UI Component Library** - Reusable Button, Input, Card, Alert components
+- **Tailwind CSS** - Modern, responsive design with dark theme
+- **Type Safety** - Centralized type definitions with full inference
 
-### Adding Features
+### Backend (Node.js + Express)
 
-1. Update TypeScript types in `front-end/src/types/`
-2. Implement crypto logic in `front-end/src/utils/crypto.ts`
-3. Create React components in `front-end/src/components/`
-4. Add API endpoints in `server/src/routes/`
-5. Update shared config if needed
+- **Express Framework** - Modular route-based architecture
+- **SQLite Database** - Lightweight, serverless with migrations
+- **Service Layer** - Separated concerns (crypto, email, database, storage)
+- **Environment Configuration** - All settings via environment variables
+- **Error Handling** - Comprehensive try-catch with user-friendly messages
+- **Logging** - Console and file-based audit logging
+- **Middleware Chain** - Security headers, CORS, rate limiting, validation
 
-### Testing
+### Development Practices
 
-```bash
-# Frontend
-cd front-end
-npm run lint
-npm run build
-
-# Backend
-cd server
-npm test
-npm run lint
-```
+- **Git-based Workflow** - Phase-based branching and feature development
+- **Environment Files** - Example files for easy setup (.env.example)
+- **Documentation** - Inline comments and comprehensive markdown guides
+- **Type Definitions** - Shared types between frontend and backend
+- **Configuration Management** - Centralized env.ts for frontend config
 
 ## Deployment
 
