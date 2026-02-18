@@ -1,7 +1,7 @@
 import React from "react";
 import { cn } from "../../utils/tailwind";
 
-type InputType = "text" | "email" | "password" | "number";
+type InputType = "text" | "email" | "password" | "number" | "file";
 
 interface InputProps extends Omit<
   React.InputHTMLAttributes<HTMLInputElement>,

@@ -18,6 +18,12 @@ function App() {
   const [fileId] = useState<string | null>(urlFileId);
   const { message, showMessage, clearMessage } = useMessage();
 
+  const handleResetRecipient = () => {
+    window.history.replaceState({}, "", window.location.pathname);
+    setActiveTab("sender");
+    showMessage("Reset complete", "info");
+  };
+
   const handleTabChange = useCallback(
     (tab: TabType) => {
       setActiveTab(tab);
@@ -77,7 +83,11 @@ function App() {
         <div className="animate-in fade-in duration-300">
           {activeTab === "sender" && <Sender onMessage={showMessage} />}
           {activeTab === "recipient" && (
-            <Recipient fileId={fileId} onMessage={showMessage} />
+            <Recipient
+              fileId={fileId}
+              onMessage={showMessage}
+              onReset={handleResetRecipient}
+            />
           )}
           {activeTab === "legacy" && <Legacy onMessage={showMessage} />}
         </div>

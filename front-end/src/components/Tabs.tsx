@@ -1,6 +1,7 @@
 import React from "react";
 import type { TabType } from "../types";
 import { cn } from "../utils/tailwind";
+import { Button } from "./ui/Button";
 
 interface TabsProps {
   activeTab: TabType;
@@ -21,7 +22,7 @@ export const Tabs = React.memo(
         {tabs.map((tab) => {
           const isDisabled = disabledTabs.includes(tab.id);
           return (
-            <button
+            <Button
               key={tab.id}
               onClick={() => !isDisabled && onTabChange(tab.id)}
               disabled={isDisabled}
@@ -44,7 +45,7 @@ export const Tabs = React.memo(
             >
               <span>{tab.icon}</span>
               {tab.label}
-            </button>
+            </Button>
           );
         })}
       </div>

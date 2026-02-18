@@ -249,7 +249,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
       {/* File Selection */}
       <Card title="Step 1: Select File" subtitle="Choose a file to encrypt">
         <div className="space-y-4">
-          <input
+          <Input
             type="file"
             onChange={handleFileSelect}
             className="block w-full px-4 py-3 border-2 border-dashed border-gray-600 rounded-lg bg-gray-700/50 text-white hover:border-blue-500 transition-colors cursor-pointer"
@@ -336,7 +336,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
                 <label className="block text-xs font-semibold text-gray-300 mb-2">
                   Expires In (minutes)
                 </label>
-                <input
+                <Input
                   type="number"
                   min={env.ui.minExpiryMinutes}
                   max={env.ui.maxExpiryMinutes}

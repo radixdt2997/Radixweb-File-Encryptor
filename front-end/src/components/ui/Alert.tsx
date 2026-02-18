@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { cn } from "../../utils/tailwind";
+import { Button } from "./Button";
 
 type CardVariant = "default" | "success" | "error" | "warning" | "info";
 
@@ -67,13 +68,13 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           <p className="text-sm font-medium">{text}</p>
         </div>
         {onClose && (
-          <button
+          <Button
             onClick={onClose}
             className="text-xl leading-none opacity-70 hover:opacity-100 transition-opacity flex-shrink-0"
             aria-label="Close alert"
           >
             ×
-          </button>
+          </Button>
         )}
       </div>
     );
