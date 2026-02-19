@@ -18,6 +18,8 @@ import {
   storage,
   validateConfiguration,
 } from "./config";
+import { getOpenApiSpec } from "./openapi";
+import swaggerUi from "swagger-ui-express";
 
 // Routes
 import downloadRoutes from "./routes/download";
@@ -191,6 +193,23 @@ const upload = multer({
     }
   },
 });
+
+// ============================================================================
+// API DOCUMENTATION (Swagger UI)
+// ============================================================================
+
+if (server.docsEnabled) {
+  const openApiSpec = getOpenApiSpec(server.baseUrl);
+  app.use("/api-docs", swaggerUi.serve);
+  app.get("/api-docs", swaggerUi.setup(openApiSpec, {
+    customSiteTitle: "Secure File Server API",
+    customCss: ".swagger-ui .topbar { display: none }",
+  }));
+  app.get("/api-docs.json", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(openApiSpec);
+  });
+}
 
 // ============================================================================
 // ROUTES

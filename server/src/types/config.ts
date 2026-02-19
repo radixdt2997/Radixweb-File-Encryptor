@@ -13,6 +13,8 @@ export interface ServerConfig {
   host: string;
   baseUrl: string;
   downloadPageBaseUrl: string;
+  /** Enable Swagger UI at /api-docs. Default: true in dev, false in production unless SWAGGER_ENABLED=true */
+  docsEnabled: boolean;
 }
 
 /**
@@ -80,6 +82,7 @@ export interface ConfigSummary {
     port: number;
     host: string;
     downloadPageBaseUrl: string;
+    docsEnabled: boolean;
   };
   database: {
     path: string;

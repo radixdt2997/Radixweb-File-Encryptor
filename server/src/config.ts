@@ -26,15 +26,19 @@ dotenv.config();
 
 const port = parseInt(process.env.PORT || "3000", 10);
 
+const nodeEnv = (process.env.NODE_ENV || "development") as "development" | "production" | "test";
+const swaggerEnabledEnv = process.env.SWAGGER_ENABLED === "true";
+
 export const server: ServerConfig = {
-  nodeEnv: (process.env.NODE_ENV || "development") as "development" | "production" | "test",
+  nodeEnv,
   port,
   host: process.env.HOST || "localhost",
-  /** API base URL (e.g. for docs). */
-  baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
+  /** Backend API base URL (Swagger "Try it out", absolute links). Defaults to this server. */
+  baseUrl: process.env.API_BASE_URL || `http://localhost:${port}`,
   /** Frontend URL for download links in emails (recipient opens this to enter OTP). */
   downloadPageBaseUrl:
     process.env.BASE_URL || process.env.FRONTEND_URL || "http://localhost:5173",
+  docsEnabled: nodeEnv !== "production" ? true : swaggerEnabledEnv,
 };
 
 // ============================================================================
@@ -133,6 +137,7 @@ export function getConfigSummary(): ConfigSummary {
       port: server.port,
       host: server.host,
       downloadPageBaseUrl: server.downloadPageBaseUrl,
+      docsEnabled: server.docsEnabled,
     },
     database: {
       path: database.path,
