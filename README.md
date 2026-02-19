@@ -27,7 +27,7 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 ### Frontend (React + TypeScript + Tailwind)
 
 ```bash
-cd front-end
+cd client
 
 # Setup
 cp .env.example .env.local
@@ -162,7 +162,7 @@ VITE_PBKDF2_ITERATIONS=250000
 VITE_DEBUG_MODE=false
 ```
 
-See `front-end/.env.example` and `front-end/ENV_CONFIGURATION.md` for complete configuration options.
+See `client/.env.example` and `client/ENV_CONFIGURATION.md` for complete configuration options.
 
 ### Backend Environment Variables (.env.development)
 
@@ -290,7 +290,7 @@ Requires Web Crypto API support.
 ### Frontend (Static Hosting)
 
 ```bash
-cd front-end
+cd client
 npm run build
 # Deploy dist/ folder to Netlify, Vercel, etc.
 ```
