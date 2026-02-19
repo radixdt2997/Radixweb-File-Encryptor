@@ -225,6 +225,41 @@ For **production**, see `server/.env.example` for production rate limiting setti
 - **Audit Logging** - Per-recipient and per-file access tracking
 - **Automatic Cleanup** - Expired files automatically removed
 
+### Encryption at Rest (Optional)
+
+The server can encrypt data **on disk** in addition to the existing zero-knowledge client-side encryption. This does not change the client flow: files are still encrypted in the browser before upload; the server only adds a second layer for storage.
+
+**What is encrypted when enabled:**
+
+- **File storage**: Each file blob on disk is encrypted with a server-derived key (AES-256-GCM) before `fs.writeFile`. On read, the blob is decrypted so the API still returns the same client-encrypted payload.
+- **Database**: Sensitive columns (`wrapped_key`, `wrapped_key_salt`) are encrypted before INSERT and decrypted after SELECT. Legacy rows without the version byte are read as plaintext for backward compatibility.
+
+**Key hierarchy:**
+
+- **Master key (KEK)**: Set via `ENCRYPTION_MASTER_KEY` (32 bytes as 64 hex or 44 base64 chars). In production, use a secret manager or KMS; do not commit the key.
+- **Data encryption keys (DEK)**: Derived from the master key with HKDF (separate keys for file storage and DB). No DEKs are stored on disk.
+
+**Environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `ENCRYPTION_MASTER_KEY` | 32-byte key as 64 hex chars or 44 base64 chars. Required when encryption at rest is enabled. |
+| `ENCRYPTION_ENABLED` | Set to `true` to enable. Default is `false` for safe rollout. |
+
+**Migration:** Existing files and DB rows remain readable (legacy format). To encrypt them, set `ENCRYPTION_MASTER_KEY` and `ENCRYPTION_ENABLED=true`, then run:
+
+```bash
+cd server && pnpm run migrate-encryption-at-rest
+```
+
+Alternatively, leave legacy data as-is; it will be removed by retention. New data will be encrypted at rest once the feature is enabled.
+
+**Security notes:**
+
+- **No key or plaintext logging** – The master key and decrypted content are never logged.
+- **Key rotation** – To rotate the master key: derive new DEKs, re-encrypt existing data with the new DEKs (e.g. run the migration script with the new key after writing a script that decrypts with the old key and encrypts with the new), then switch to the new master key.
+- **Full-disk encryption** – Use OS- or hardware-level full-disk encryption on the server as an additional layer; encryption at rest protects against exposure of raw disk or backups.
+
 ### Infrastructure
 
 - **HTTPS Ready** - Set NODE_ENV=production for HSTS headers

@@ -35,6 +35,16 @@ export interface StorageConfig {
 }
 
 /**
+ * Encryption at rest configuration
+ */
+export interface EncryptionConfig {
+  /** Master key (KEK) for deriving file and DB DEKs. 32 bytes (64 hex or 44 base64). */
+  masterKey: Buffer | null;
+  /** Enable server-side encryption at rest for files and DB. Default false for safe rollout. */
+  enabled: boolean;
+}
+
+/**
  * Email service configuration
  */
 export interface EmailConfig {
@@ -106,5 +116,9 @@ export interface ConfigSummary {
   logging: {
     level: string;
     auditEnabled: boolean;
+  };
+  encryption?: {
+    enabled: boolean;
+    keyConfigured: boolean;
   };
 }
