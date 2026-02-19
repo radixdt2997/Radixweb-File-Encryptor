@@ -7,8 +7,7 @@
     "scripts": {
         "start": "node src/app.js",
         "dev": "nodemon src/app.js",
-        "test": "jest",
-        "init-db": "node scripts/init-db.js"
+        "test": "jest"
     },
     "keywords": [
         "encryption",

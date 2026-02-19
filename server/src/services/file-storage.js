@@ -9,14 +9,16 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { storage } from "../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Configuration
-const STORAGE_PATH =
-  process.env.STORAGE_PATH || path.join(__dirname, "../../data/uploads");
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024; // 100MB
-const FILE_RETENTION_DAYS = parseInt(process.env.FILE_RETENTION_DAYS) || 30;
+// Configuration from config module
+const STORAGE_PATH = path.isAbsolute(storage.path)
+  ? storage.path
+  : path.join(__dirname, "../..", storage.path);
+const MAX_FILE_SIZE = storage.maxFileSize;
+const FILE_RETENTION_DAYS = storage.retentionDays;
 
 // ============================================================================
 // DIRECTORY MANAGEMENT

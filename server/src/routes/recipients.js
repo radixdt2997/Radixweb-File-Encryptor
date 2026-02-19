@@ -1,5 +1,6 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
+import { sendError } from "../lib/errorResponse.js";
 import {
   deleteRecipient,
   getRecipientsByFileId,
@@ -23,11 +24,7 @@ router.get("/:fileId/recipients", fileIdParam, async (req, res) => {
   // Validate params
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: "Validation Error",
-      message: "Invalid request parameters",
-      details: errors.array(),
-    });
+    return sendError(res, 400, "Validation Error", "Invalid request parameters", errors.array());
   }
 
   const { fileId } = req.params;
@@ -47,10 +44,7 @@ router.get("/:fileId/recipients", fileIdParam, async (req, res) => {
     return res.status(200).json({ recipients: response });
   } catch (error) {
     console.error("Error listing recipients:", error);
-    return res.status(500).json({
-      error: "Recipient Listing Failed",
-      message: "Failed to fetch recipients for this file",
-    });
+    return sendError(res, 500, "Recipient Listing Failed", "Failed to fetch recipients for this file");
   }
 });
 
@@ -62,11 +56,7 @@ router.delete(
     // Validate params
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: "Validation Error",
-        message: "Invalid request parameters",
-        details: errors.array(),
-      });
+      return sendError(res, 400, "Validation Error", "Invalid request parameters", errors.array());
     }
 
     const { fileId, recipientId } = req.params;
@@ -91,10 +81,7 @@ router.delete(
       });
     } catch (error) {
       console.error("Error revoking recipient:", error);
-      return res.status(500).json({
-        error: "Recipient Revocation Failed",
-        message: "Failed to revoke recipient access",
-      });
+      return sendError(res, 500, "Recipient Revocation Failed", "Failed to revoke recipient access");
     }
   },
 );

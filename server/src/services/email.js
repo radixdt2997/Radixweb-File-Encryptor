@@ -6,7 +6,7 @@
  */
 
 import nodemailer from "nodemailer";
-import { emailMock } from "../config.js";
+import { email as emailConfig, emailMock } from "../config.js";
 
 // ============================================================================
 // EMAIL CONFIGURATION
@@ -14,9 +14,6 @@ import { emailMock } from "../config.js";
 
 let transporter = null;
 
-/**
- * Initialize email service
- */
 /**
  * Mock email sender for development
  */
@@ -34,13 +31,6 @@ async function mockSendMail(mailOptions) {
 }
 
 export async function initEmailService() {
-  const emailService = process.env.EMAIL_SERVICE;
-  const emailHost = process.env.EMAIL_HOST;
-  const emailPort = parseInt(process.env.EMAIL_PORT) || 587;
-  const emailSecure = process.env.EMAIL_SECURE === "true";
-  const emailUser = process.env.EMAIL_USER;
-  const emailPass = process.env.EMAIL_PASS;
-
   // For development, allow mock email service
   const useMockEmail =
     emailMock.enabled || process.env.NODE_ENV === "development";
@@ -57,22 +47,22 @@ export async function initEmailService() {
     return true;
   }
 
-  // Check if email is configured
-  if (!emailUser || !emailPass) {
+  // Check if email is configured (from config module)
+  if (!emailConfig.user || !emailConfig.pass) {
     throw new Error(
       "Email service not configured. Set EMAIL_USER and EMAIL_PASS environment variables.",
     );
   }
 
-  // Create transporter
+  // Create transporter from config
   transporter = nodemailer.createTransport({
-    service: emailService,
-    host: emailHost,
-    port: emailPort,
-    secure: emailSecure,
+    service: emailConfig.service,
+    host: emailConfig.host,
+    port: emailConfig.port,
+    secure: emailConfig.secure,
     auth: {
-      user: emailUser,
-      pass: emailPass,
+      user: emailConfig.user,
+      pass: emailConfig.pass,
     },
     // Additional security options
     tls: {
@@ -113,7 +103,7 @@ export async function sendDownloadLinkEmail(recipientEmail, data) {
   const { fileName, fileSize, downloadUrl, expiryMinutes } = data;
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
+    from: emailConfig.from,
     to: recipientEmail,
     subject: `Secure file shared with you - ${fileName}`,
     html: `
@@ -211,7 +201,7 @@ export async function sendOTPEmail(recipientEmail, data) {
   console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
+    from: emailConfig.from,
     to: recipientEmail,
     subject: "Your one-time password for secure file delivery",
     html: `
@@ -314,7 +304,7 @@ export async function sendTestEmail(recipientEmail) {
   }
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || "noreply@radixweb.com",
+    from: emailConfig.from,
     to: recipientEmail,
     subject: "Secure File Server - Test Email",
     text: "This is a test email from your Secure File Server. Email service is working correctly!",

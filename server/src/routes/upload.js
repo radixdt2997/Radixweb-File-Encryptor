@@ -14,6 +14,8 @@ import {
   logAuditEvent,
   logRecipientAuditEvent,
 } from "../services/database.js";
+import { server, storage } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import { sendDownloadLinkEmail, sendOTPEmail } from "../services/email.js";
 import { saveFile } from "../services/file-storage.js";
 
@@ -98,11 +100,7 @@ router.post("/", uploadValidation, async (req, res) => {
   console.log("[UPLOAD] Validation results:", errors);
 
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: "Validation Error",
-      message: "Invalid request data",
-      details: errors.array(),
-    });
+    return sendError(res, 400, "Validation Error", "Invalid request data", errors.array());
   }
 
   try {
@@ -119,10 +117,12 @@ router.post("/", uploadValidation, async (req, res) => {
       !req.files.wrappedKeySalt
     ) {
       console.error("[UPLOAD] Missing files:", req.files);
-      return res.status(400).json({
-        error: "Files Required",
-        message: "Encrypted file data, wrapped key, and salt are all required",
-      });
+      return sendError(
+        res,
+        400,
+        "Files Required",
+        "Encrypted file data, wrapped key, and salt are all required",
+      );
     }
 
     const encryptedDataFile = req.files.encryptedData[0];
@@ -136,14 +136,15 @@ router.post("/", uploadValidation, async (req, res) => {
 
     // Validate file sizes
 
-    const maxFileSize =
-      parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024;
+    const maxFileSize = storage.maxFileSize;
     if (encryptedDataFile.size > maxFileSize) {
       console.error("[UPLOAD] File too large:", encryptedDataFile.size);
-      return res.status(413).json({
-        error: "File Too Large",
-        message: `File size ${encryptedDataFile.size} exceeds maximum ${maxFileSize / (1024 * 1024)}MB`,
-      });
+      return sendError(
+        res,
+        413,
+        "File Too Large",
+        `File size ${encryptedDataFile.size} exceeds maximum ${maxFileSize / (1024 * 1024)}MB`,
+      );
     }
 
     // Generate unique file ID
@@ -187,10 +188,7 @@ router.post("/", uploadValidation, async (req, res) => {
         },
       ];
     } else {
-      return res.status(400).json({
-        error: "Validation Error",
-        message: "At least one recipient is required",
-      });
+      return sendError(res, 400, "Validation Error", "At least one recipient is required");
     }
 
     // Backend domain whitelist enforcement
@@ -198,9 +196,7 @@ router.post("/", uploadValidation, async (req, res) => {
       (r) => !RADIX_EMAIL_REGEX.test(r.email),
     );
     if (invalidDomainRecipients.length > 0) {
-      return res.status(400).json({
-        error: "Invalid email domain",
-        message: "Only @radixweb.com emails are allowed",
+      return sendError(res, 400, "Invalid email domain", "Only @radixweb.com emails are allowed", {
         invalidEmails: invalidDomainRecipients.map((r) => r.email),
       });
     }
@@ -236,9 +232,8 @@ router.post("/", uploadValidation, async (req, res) => {
       recipientIds.push({ id: recipientId, email: recipient.email, otp: recipient.otp });
     }
 
-    // Generate download URL
-    const baseUrl = process.env.BASE_URL || "http://localhost:5173";
-    const downloadUrl = `${baseUrl}?fileId=${fileId}`;
+    // Generate download URL (frontend page where recipient enters OTP)
+    const downloadUrl = `${server.downloadPageBaseUrl}?fileId=${fileId}`;
 
     // Log successful upload
     await logAuditEvent(fileId, "upload", req.ip, req.get("User-Agent"), {
@@ -335,12 +330,13 @@ router.post("/", uploadValidation, async (req, res) => {
       },
     );
 
-    res.status(500).json({
-      error: "Upload Failed",
-      message: "Failed to process file upload",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    sendError(
+      res,
+      500,
+      "Upload Failed",
+      "Failed to process file upload",
+      server.nodeEnv === "development" ? error.message : undefined,
+    );
   }
 });
 

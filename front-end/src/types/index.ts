@@ -43,3 +43,16 @@ export interface RecipientState {
 
 export type TabType = "sender" | "recipient" | "legacy";
 export type MessageType = "info" | "success" | "error";
+
+/**
+ * Standard API error response from the server.
+ * All error responses use this shape so the client can parse them consistently.
+ */
+export interface ApiErrorResponse {
+  /** Short error code (e.g. "Validation Error", "Too Many Attempts") */
+  error: string;
+  /** User-facing message */
+  message: string;
+  /** Optional extra data (validation details, attemptsRemaining, etc.) */
+  details?: unknown;
+}

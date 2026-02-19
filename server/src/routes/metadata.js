@@ -7,6 +7,8 @@
 
 import express from "express";
 import { param, validationResult } from "express-validator";
+import { server } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import {
   getFileById,
   isFileExpired,
@@ -36,11 +38,7 @@ router.get("/:fileId", metadataValidation, async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: "Validation Error",
-        message: "Invalid file ID format",
-        details: errors.array(),
-      });
+      return sendError(res, 400, "Validation Error", "Invalid file ID format", errors.array());
     }
 
     const { fileId } = req.params;
@@ -54,10 +52,7 @@ router.get("/:fileId", metadataValidation, async (req, res) => {
         found: false,
       });
 
-      return res.status(404).json({
-        error: "File Not Found",
-        message: "The requested file does not exist",
-      });
+      return sendError(res, 404, "File Not Found", "The requested file does not exist");
     }
 
     // Check if file is expired
@@ -68,10 +63,7 @@ router.get("/:fileId", metadataValidation, async (req, res) => {
         expiryTime: file.expiry_time,
       });
 
-      return res.status(404).json({
-        error: "File Not Found",
-        message: "The requested file does not exist",
-      });
+      return sendError(res, 404, "File Not Found", "The requested file does not exist");
     }
 
     // Log metadata access (for analytics)
@@ -104,12 +96,13 @@ router.get("/:fileId", metadataValidation, async (req, res) => {
       },
     );
 
-    res.status(500).json({
-      error: "Metadata Error",
-      message: "Failed to retrieve file metadata",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    sendError(
+      res,
+      500,
+      "Metadata Error",
+      "Failed to retrieve file metadata",
+      server.nodeEnv === "development" ? error.message : undefined,
+    );
   }
 });
 

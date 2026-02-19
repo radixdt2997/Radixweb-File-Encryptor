@@ -8,6 +8,8 @@
 import crypto from "crypto";
 import express from "express";
 import { body, validationResult } from "express-validator";
+import { security, server } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import {
   getFileById,
   getRecipientByFileAndEmail,
@@ -55,11 +57,7 @@ router.post("/", otpValidation, async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: "Validation Error",
-        message: "Invalid request data",
-        details: errors.array(),
-      });
+      return sendError(res, 400, "Validation Error", "Invalid request data", errors.array());
     }
 
     const { fileId, otp, recipientEmail } = req.body;
@@ -75,10 +73,7 @@ router.post("/", otpValidation, async (req, res) => {
         otpProvided: otp ? "yes" : "no",
       });
 
-      return res.status(400).json({
-        error: "Invalid Request",
-        message: "File not found or expired",
-      });
+      return sendError(res, 400, "Invalid Request", "File not found or expired");
     }
 
     // Check if file is expired
@@ -88,10 +83,7 @@ router.post("/", otpValidation, async (req, res) => {
         expiryTime: file.expiry_time,
       });
 
-      return res.status(400).json({
-        error: "File Expired",
-        message: "This file has expired and is no longer available",
-      });
+      return sendError(res, 400, "File Expired", "This file has expired and is no longer available");
     }
 
     // Check if one-time file was already downloaded
@@ -100,10 +92,7 @@ router.post("/", otpValidation, async (req, res) => {
         reason: "already_used",
       });
 
-      return res.status(400).json({
-        error: "File Already Used",
-        message: "This file has already been downloaded",
-      });
+      return sendError(res, 400, "File Already Used", "This file has already been downloaded");
     }
 
     // Determine whether to use recipient-specific verification (Phase 3)
@@ -145,10 +134,7 @@ router.post("/", otpValidation, async (req, res) => {
           },
         );
 
-        return res.status(400).json({
-          error: "Invalid Recipient",
-          message: "Recipient not found for this file",
-        });
+        return sendError(res, 400, "Invalid Recipient", "Recipient not found for this file");
       }
 
       // Constant-time email comparison to prevent timing attacks
@@ -167,10 +153,7 @@ router.post("/", otpValidation, async (req, res) => {
           email: recipientEmail,
         });
 
-        return res.status(400).json({
-          error: "Invalid Recipient",
-          message: "Recipient not found for this file",
-        });
+        return sendError(res, 400, "Invalid Recipient", "Recipient not found for this file");
       }
 
       otpContext = {
@@ -185,8 +168,8 @@ router.post("/", otpValidation, async (req, res) => {
       };
     }
 
-    // Check attempt limits
-    const maxAttempts = parseInt(process.env.OTP_MAX_ATTEMPTS) || 3;
+    // Check attempt limits (from config)
+    const maxAttempts = security.otpMaxAttempts;
     if (otpContext.otpAttempts >= maxAttempts) {
       await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
         reason: "too_many_attempts",
@@ -208,14 +191,11 @@ router.post("/", otpValidation, async (req, res) => {
         );
       }
 
-      return res.status(400).json({
-        error: "Too Many Attempts",
-        message: "Maximum OTP attempts exceeded",
-      });
+      return sendError(res, 400, "Too Many Attempts", "Maximum OTP attempts exceeded");
     }
 
-    // Check cooldown between attempts
-    const cooldownMs = parseInt(process.env.OTP_COOLDOWN_MS) || 5000; // 5 seconds default
+    // Check cooldown between attempts (from config)
+    const cooldownMs = security.otpCooldownMs;
     if (otpContext.lastAttemptAt) {
       const lastAttempt = new Date(otpContext.lastAttemptAt);
       const timeSinceLastAttempt = Date.now() - lastAttempt.getTime();
@@ -245,10 +225,12 @@ router.post("/", otpValidation, async (req, res) => {
           );
         }
 
-        return res.status(429).json({
-          error: "Too Many Attempts",
-          message: `Please wait ${remainingCooldown} seconds before trying again`,
-        });
+        return sendError(
+          res,
+          429,
+          "Too Many Attempts",
+          `Please wait ${remainingCooldown} seconds before trying again`,
+        );
       }
     }
 
@@ -296,9 +278,7 @@ router.post("/", otpValidation, async (req, res) => {
         );
       }
 
-      return res.status(400).json({
-        error: "Invalid OTP",
-        message: "The provided OTP is incorrect",
+      return sendError(res, 400, "Invalid OTP", "The provided OTP is incorrect", {
         attemptsRemaining: Math.max(0, maxAttempts - otpContext.otpAttempts),
       });
     }
@@ -365,12 +345,13 @@ router.post("/", otpValidation, async (req, res) => {
       },
     );
 
-    res.status(500).json({
-      error: "Verification Failed",
-      message: "Failed to verify OTP",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    sendError(
+      res,
+      500,
+      "Verification Failed",
+      "Failed to verify OTP",
+      server.nodeEnv === "development" ? error.message : undefined,
+    );
   }
 });
 

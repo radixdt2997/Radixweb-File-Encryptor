@@ -7,6 +7,8 @@
 
 import express from "express";
 import { param, validationResult } from "express-validator";
+import { server } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import {
   getFileById,
   isFileExpired,
@@ -43,11 +45,7 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: "Validation Error",
-        message: "Invalid file ID format",
-        details: errors.array(),
-      });
+      return sendError(res, 400, "Validation Error", "Invalid file ID format", errors.array());
     }
 
     const { fileId } = req.params;
@@ -61,10 +59,7 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
         reason: "file_not_found",
       });
 
-      return res.status(404).json({
-        error: "File Not Found",
-        message: "The requested file does not exist",
-      });
+      return sendError(res, 404, "File Not Found", "The requested file does not exist");
     }
 
     // Check if file is expired
@@ -74,10 +69,7 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
         expiryTime: file.expiry_time,
       });
 
-      return res.status(400).json({
-        error: "File Expired",
-        message: "This file has expired and is no longer available",
-      });
+      return sendError(res, 400, "File Expired", "This file has expired and is no longer available");
     }
 
     // Check if one-time file was already downloaded
@@ -86,10 +78,7 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
         reason: "already_used",
       });
 
-      return res.status(400).json({
-        error: "File Already Used",
-        message: "This file has already been downloaded",
-      });
+      return sendError(res, 400, "File Already Used", "This file has already been downloaded");
     }
 
     // Read the encrypted file from storage
@@ -167,18 +156,16 @@ router.get("/:fileId", downloadValidation, async (req, res) => {
     );
 
     if (error.message === "File not found") {
-      return res.status(404).json({
-        error: "File Not Found",
-        message: "The requested file could not be found",
-      });
+      return sendError(res, 404, "File Not Found", "The requested file could not be found");
     }
 
-    res.status(500).json({
-      error: "Download Failed",
-      message: "Failed to download file",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    sendError(
+      res,
+      500,
+      "Download Failed",
+      "Failed to download file",
+      server.nodeEnv === "development" ? error.message : undefined,
+    );
   }
 });
 

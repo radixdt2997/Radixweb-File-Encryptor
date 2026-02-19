@@ -6,14 +6,18 @@
  */
 
 import cors from "cors";
-import { config } from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import multer from "multer";
 
-// Load environment variables
-config();
+import {
+  getConfigSummary,
+  security,
+  server,
+  storage,
+  validateConfiguration,
+} from "./config.js";
 
 // Routes
 import downloadRoutes from "./routes/download.js";
@@ -25,14 +29,18 @@ import verifyRoutes from "./routes/verify-otp.js";
 import recipientsRoutes from "./routes/recipients.js";
 
 // Services
+import { sendError } from "./lib/errorResponse.js";
 import { closeDatabase, initDatabase } from "./services/database.js";
 import { initEmailService } from "./services/email.js";
 import { ensureDirectories } from "./services/file-storage.js";
 
-// Configuration
-const PORT = process.env.PORT || 3001;
-const HOST = process.env.HOST || "localhost";
-const NODE_ENV = process.env.NODE_ENV || "development";
+// Configuration from config module
+const PORT = server.port;
+const HOST = server.host;
+const NODE_ENV = server.nodeEnv;
+const corsOrigins = security.corsOrigin.includes(",")
+  ? security.corsOrigin.split(",").map((o) => o.trim())
+  : [security.corsOrigin];
 
 // Initialize Express app
 const app = express();
@@ -60,27 +68,23 @@ app.use(
   }),
 );
 
-// CORS configuration
+// CORS configuration (from config)
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",")
-      : ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: corsOrigins,
     methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
 );
 
-// Rate limiting - use environment variables
+// Rate limiting (from config)
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 100 requests per window
+  windowMs: security.rateLimitWindowMs,
+  max: security.rateLimitMaxRequests,
   message: {
     error: "Too many requests from this IP, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000,
-    ),
+    retryAfter: Math.ceil(security.rateLimitWindowMs / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -88,15 +92,13 @@ const limiter = rateLimit({
 
 app.use("/api/", limiter);
 
-// Stricter rate limiting for sensitive endpoints
+// Stricter rate limiting for OTP verification (from config)
 const strictLimiter = rateLimit({
-  windowMs: parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000, // 5 seconds default
-  max: parseInt(process.env.OTP_MAX_ATTEMPTS) || 3, // 3 attempts per cooldown period
+  windowMs: security.otpCooldownMs,
+  max: security.otpMaxAttempts,
   message: {
     error: "Too many OTP attempts, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.OTP_COOLDOWN_MS) || 5 * 1000) / 1000,
-    ),
+    retryAfter: Math.ceil(security.otpCooldownMs / 1000),
   },
 });
 
@@ -171,7 +173,7 @@ app.use((req, res, next) => {
 // FILE UPLOAD CONFIGURATION
 // ============================================================================
 
-const maxFileSize = parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024; // 100MB default
+const maxFileSize = storage.maxFileSize;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -230,10 +232,12 @@ app.use("/api/files", recipientAccessLimiter, recipientsRoutes);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    error: "Endpoint not found",
-    message: `Route ${req.method} ${req.path} does not exist`,
-  });
+  sendError(
+    res,
+    404,
+    "Endpoint not found",
+    `Route ${req.method} ${req.path} does not exist`,
+  );
 });
 
 // Global error handler
@@ -242,26 +246,26 @@ app.use((error, req, res, next) => {
 
   // Mongoose validation error
   if (error.name === "ValidationError") {
-    return res.status(400).json({
-      error: "Validation Error",
-      message: error.message,
-    });
+    return sendError(res, 400, "Validation Error", error.message);
   }
 
   // Multer file size error
   if (error.code === "LIMIT_FILE_SIZE") {
-    return res.status(413).json({
-      error: "File too large",
-      message: `Maximum file size is ${maxFileSize / (1024 * 1024)}MB`,
-    });
+    return sendError(
+      res,
+      413,
+      "File too large",
+      `Maximum file size is ${maxFileSize / (1024 * 1024)}MB`,
+    );
   }
 
   // Default error response
-  res.status(error.status || 500).json({
-    error: "Internal Server Error",
-    message:
-      NODE_ENV === "development" ? error.message : "Something went wrong",
-  });
+  sendError(
+    res,
+    error.status || 500,
+    "Internal Server Error",
+    NODE_ENV === "development" ? error.message : "Something went wrong",
+  );
 });
 
 // ============================================================================
@@ -271,6 +275,10 @@ app.use((error, req, res, next) => {
 async function startServer() {
   try {
     console.log("🚀 Starting Secure File Server...");
+
+    validateConfiguration();
+    console.log("✅ Configuration validated");
+    console.log("📋 Config summary:", JSON.stringify(getConfigSummary(), null, 2));
 
     // Ensure required directories exist
     await ensureDirectories();

@@ -6,6 +6,8 @@
  */
 
 import express from "express";
+import { server } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import {
   healthCheck as dbHealthCheck,
   getDatabaseStats,
@@ -49,7 +51,7 @@ router.get("/", async (req, res) => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       version: process.env.npm_package_version || "1.0.0",
-      environment: process.env.NODE_ENV || "development",
+      environment: server.nodeEnv,
       services: {
         database: dbHealth,
         storage: storageHealth,
@@ -68,13 +70,13 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("Health check error:", error);
 
-    res.status(503).json({
-      status: "unhealthy",
-      timestamp: new Date().toISOString(),
-      error: "Health check failed",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    sendError(
+      res,
+      503,
+      "Health check failed",
+      "Health check failed",
+      server.nodeEnv === "development" ? error.message : undefined,
+    );
   }
 });
 

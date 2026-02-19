@@ -7,6 +7,8 @@
 
 import express from "express";
 import { body, validationResult } from "express-validator";
+import { server } from "../config.js";
+import { sendError } from "../lib/errorResponse.js";
 import { sendTestEmail } from "../services/email.js";
 
 const router = express.Router();
@@ -25,22 +27,15 @@ router.post(
   ],
   async (req, res) => {
     // Only allow in development
-    if (process.env.NODE_ENV === "production") {
-      return res.status(403).json({
-        error: "Forbidden",
-        message: "Test email endpoint not available in production",
-      });
+    if (server.nodeEnv === "production") {
+      return sendError(res, 403, "Forbidden", "Test email endpoint not available in production");
     }
 
     try {
       // Check validation errors
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({
-          error: "Validation Error",
-          message: "Invalid email address",
-          details: errors.array(),
-        });
+        return sendError(res, 400, "Validation Error", "Invalid email address", errors.array());
       }
 
       const { email } = req.body;
@@ -57,12 +52,13 @@ router.post(
     } catch (error) {
       console.error("Test email error:", error);
 
-      res.status(500).json({
-        error: "Email Test Failed",
-        message: "Failed to send test email",
-        details:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
-      });
+      sendError(
+        res,
+        500,
+        "Email Test Failed",
+        "Failed to send test email",
+        server.nodeEnv === "development" ? error.message : undefined,
+      );
     }
   },
 );

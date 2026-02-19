@@ -16,11 +16,15 @@ dotenv.config();
 
 const port = parseInt(process.env.PORT) || 3000;
 
-const server = {
+export const server = {
   nodeEnv: process.env.NODE_ENV || "development",
   port,
   host: process.env.HOST || "localhost",
+  /** API base URL (e.g. for docs). */
   baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
+  /** Frontend URL for download links in emails (recipient opens this to enter OTP). */
+  downloadPageBaseUrl:
+    process.env.BASE_URL || process.env.FRONTEND_URL || "http://localhost:5173",
 };
 
 // ============================================================================
@@ -29,6 +33,9 @@ const server = {
 
 export const database = {
   path: process.env.DB_PATH || "./data/secure-files.db",
+  useSqlite:
+    process.env.USE_SQLITE === "true" ||
+    process.env.NODE_ENV === "production",
 };
 
 // ============================================================================
@@ -45,11 +52,16 @@ export const storage = {
 // EMAIL CONFIGURATION
 // ============================================================================
 
+const emailPort = parseInt(process.env.EMAIL_PORT) || 465;
+// Port 465 = implicit SSL; port 587 = STARTTLS (secure: false). Override with EMAIL_SECURE=true|false.
 export const email = {
   service: process.env.EMAIL_SERVICE || "smtp",
   host: process.env.EMAIL_HOST || "mail.mailtest.radixweb.net",
-  port: parseInt(process.env.EMAIL_PORT) || 465, // Try SSL port 465
-  secure: true, // true for SSL, false for STARTTLS
+  port: emailPort,
+  secure:
+    process.env.EMAIL_SECURE !== undefined
+      ? process.env.EMAIL_SECURE === "true"
+      : emailPort === 465,
   user: process.env.EMAIL_USER || "testphp@mailtest.radixweb.net",
   pass: process.env.EMAIL_PASS || "Radix@web#8",
   from: process.env.EMAIL_FROM || "testphp@mailtest.radixweb.net",
@@ -60,10 +72,11 @@ export const email = {
 // ============================================================================
 
 export const security = {
-  corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5500",
+  corsOrigin:
+    process.env.CORS_ORIGIN || "http://localhost:5173,http://127.0.0.1:5173",
   rateLimitWindowMs:
     parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10,
+  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS) || 3,
   otpCooldownMs: parseInt(process.env.OTP_COOLDOWN_MS) || 5000, // 5 seconds
 };
@@ -83,6 +96,7 @@ export const emailMock = {
 // ============================================================================
 
 export const logging = {
+  /** Log level (reserved for future logger); auditEnabled gates audit writes in database.js. */
   level: process.env.LOG_LEVEL || "info",
   auditEnabled: process.env.AUDIT_LOG_ENABLED !== "false", // Default true
 };
@@ -92,9 +106,9 @@ export const logging = {
 // ============================================================================
 
 /**
- * Check if email service is properly configured
+ * Check if email service is properly configured (used internally by getConfigSummary & validateConfiguration).
  */
-export function isEmailConfigured() {
+function isEmailConfigured() {
   return !!(email.user && email.pass);
 }
 
@@ -107,9 +121,11 @@ export function getConfigSummary() {
       environment: server.nodeEnv,
       port: server.port,
       host: server.host,
+      downloadPageBaseUrl: server.downloadPageBaseUrl,
     },
     database: {
       path: database.path,
+      useSqlite: database.useSqlite,
     },
     storage: {
       path: storage.path,
@@ -125,6 +141,10 @@ export function getConfigSummary() {
       corsOrigin: security.corsOrigin,
       rateLimitMaxRequests: security.rateLimitMaxRequests,
       otpMaxAttempts: security.otpMaxAttempts,
+    },
+    logging: {
+      level: logging.level,
+      auditEnabled: logging.auditEnabled,
     },
   };
 }

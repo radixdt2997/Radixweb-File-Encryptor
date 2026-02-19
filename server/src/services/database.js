@@ -8,21 +8,21 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { config } from "dotenv";
+import { database as dbConfig, logging as loggingConfig } from "../config.js";
 import { v4 as uuidv4 } from "uuid";
-
-config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Environment-based database selection
-const USE_SQLITE =
-  process.env.NODE_ENV === "production" || process.env.USE_SQLITE === "true";
+// Use config for SQLite vs in-memory and DB path
+const USE_SQLITE = dbConfig.useSqlite;
+const dbPathResolved = path.isAbsolute(dbConfig.path)
+  ? dbConfig.path
+  : path.join(__dirname, "../..", dbConfig.path);
 
 // SQLite database instance
 let db = null;
 if (USE_SQLITE) {
-  const dbPath = path.join(__dirname, "../../data/secure-files.db");
+  const dbPath = dbPathResolved;
 
   // Ensure data directory exists
   const dataDir = path.dirname(dbPath);
@@ -631,7 +631,7 @@ export async function incrementRecipientOTPAttempts(recipientId) {
 }
 
 /**
- * Log audit event
+ * Log audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logAuditEvent(
   fileId,
@@ -640,6 +640,8 @@ export async function logAuditEvent(
   userAgent,
   details = {},
 ) {
+  if (!loggingConfig.auditEnabled) return;
+
   if (USE_SQLITE) {
     const stmt = db.prepare(`
       INSERT INTO audit_logs (file_id, event_type, ip_address, user_agent, details)
@@ -662,7 +664,7 @@ export async function logAuditEvent(
 }
 
 /**
- * Log recipient audit event
+ * Log recipient audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logRecipientAuditEvent(
   fileId,
@@ -672,6 +674,8 @@ export async function logRecipientAuditEvent(
   userAgent,
   details = {},
 ) {
+  if (!loggingConfig.auditEnabled) return;
+
   if (USE_SQLITE) {
     const stmt = db.prepare(`
       INSERT INTO recipient_audit_logs (
