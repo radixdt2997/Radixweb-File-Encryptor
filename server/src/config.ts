@@ -6,6 +6,16 @@
  */
 
 import dotenv from "dotenv";
+import type {
+  ServerConfig,
+  DatabaseConfig,
+  StorageConfig,
+  EmailConfig,
+  SecurityConfig,
+  EmailMockConfig,
+  LoggingConfig,
+  ConfigSummary,
+} from "./types/config";
 
 // Load environment variables
 dotenv.config();
@@ -14,10 +24,10 @@ dotenv.config();
 // SERVER CONFIGURATION
 // ============================================================================
 
-const port = parseInt(process.env.PORT) || 3000;
+const port = parseInt(process.env.PORT || "3000", 10);
 
-export const server = {
-  nodeEnv: process.env.NODE_ENV || "development",
+export const server: ServerConfig = {
+  nodeEnv: (process.env.NODE_ENV || "development") as "development" | "production" | "test",
   port,
   host: process.env.HOST || "localhost",
   /** API base URL (e.g. for docs). */
@@ -31,7 +41,7 @@ export const server = {
 // DATABASE CONFIGURATION
 // ============================================================================
 
-export const database = {
+export const database: DatabaseConfig = {
   path: process.env.DB_PATH || "./data/secure-files.db",
   useSqlite:
     process.env.USE_SQLITE === "true" ||
@@ -42,19 +52,19 @@ export const database = {
 // FILE STORAGE CONFIGURATION
 // ============================================================================
 
-export const storage = {
+export const storage: StorageConfig = {
   path: process.env.STORAGE_PATH || "./data/uploads",
-  maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024, // 100MB
-  retentionDays: parseInt(process.env.FILE_RETENTION_DAYS) || 30,
+  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "104857600", 10), // 100MB
+  retentionDays: parseInt(process.env.FILE_RETENTION_DAYS || "30", 10),
 };
 
 // ============================================================================
 // EMAIL CONFIGURATION
 // ============================================================================
 
-const emailPort = parseInt(process.env.EMAIL_PORT) || 465;
+const emailPort = parseInt(process.env.EMAIL_PORT || "465", 10);
 // Port 465 = implicit SSL; port 587 = STARTTLS (secure: false). Override with EMAIL_SECURE=true|false.
-export const email = {
+export const email: EmailConfig = {
   service: process.env.EMAIL_SERVICE || "smtp",
   host: process.env.EMAIL_HOST || "mail.mailtest.radixweb.net",
   port: emailPort,
@@ -71,31 +81,32 @@ export const email = {
 // SECURITY CONFIGURATION
 // ============================================================================
 
-export const security = {
+export const security: SecurityConfig = {
   corsOrigin:
     process.env.CORS_ORIGIN || "http://localhost:5173,http://127.0.0.1:5173",
   rateLimitWindowMs:
-    parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS) || 3,
-  otpCooldownMs: parseInt(process.env.OTP_COOLDOWN_MS) || 5000, // 5 seconds
+    parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
+  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
+  otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "3", 10),
+  otpCooldownMs: parseInt(process.env.OTP_COOLDOWN_MS || "5000", 10), // 5 seconds
 };
 
 // ============================================================================
 // EMAIL MOCK CONFIGURATION (Development)
 // ============================================================================
 
-export const emailMock = {
+export const emailMock: EmailMockConfig = {
   enabled:
-    process.env.USE_MOCK_EMAIL === "true" ||
-    process.env.NODE_ENV === "development",
+    process.env.USE_MOCK_EMAIL !== "false" &&
+    (process.env.USE_MOCK_EMAIL === "true" ||
+      (process.env.NODE_ENV === "development" && process.env.USE_MOCK_EMAIL === undefined)),
 };
 
 // ============================================================================
 // LOGGING CONFIGURATION
 // ============================================================================
 
-export const logging = {
+export const logging: LoggingConfig = {
   /** Log level (reserved for future logger); auditEnabled gates audit writes in database.js. */
   level: process.env.LOG_LEVEL || "info",
   auditEnabled: process.env.AUDIT_LOG_ENABLED !== "false", // Default true
@@ -108,14 +119,14 @@ export const logging = {
 /**
  * Check if email service is properly configured (used internally by getConfigSummary & validateConfiguration).
  */
-function isEmailConfigured() {
+function isEmailConfigured(): boolean {
   return !!(email.user && email.pass);
 }
 
 /**
  * Get configuration summary for logging
  */
-export function getConfigSummary() {
+export function getConfigSummary(): ConfigSummary {
   return {
     server: {
       environment: server.nodeEnv,
@@ -156,8 +167,8 @@ export function getConfigSummary() {
 /**
  * Validate critical configuration on startup
  */
-export function validateConfiguration() {
-  const errors = [];
+export function validateConfiguration(): boolean {
+  const errors: string[] = [];
 
   // Check required paths exist or can be created
   if (!database.path) {

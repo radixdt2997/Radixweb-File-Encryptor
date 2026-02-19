@@ -6,24 +6,26 @@
  */
 
 import express from "express";
-import { server } from "../config.js";
-import { sendError } from "../lib/errorResponse.js";
+import type { Request, Response } from "express";
+import { server } from "../config";
+import { sendError } from "../lib/errorResponse";
 import {
   healthCheck as dbHealthCheck,
   getDatabaseStats,
-} from "../services/database.js";
+} from "../services/database";
 import {
   getStorageStats,
   healthCheck as storageHealthCheck,
-} from "../services/file-storage.js";
+} from "../services/file-storage";
+import type { HealthResponse } from "../types/api";
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 // ============================================================================
 // HEALTH CHECK ENDPOINT
 // ============================================================================
 
-router.get("/", async (req, res) => {
+router.get("/", async (_req: Request, res: Response<HealthResponse>) => {
   try {
     const startTime = Date.now();
 
@@ -46,7 +48,7 @@ router.get("/", async (req, res) => {
         : "unhealthy";
 
     // Response data
-    const healthData = {
+    const healthData: HealthResponse = {
       status: overallHealth,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -75,7 +77,7 @@ router.get("/", async (req, res) => {
       503,
       "Health check failed",
       "Health check failed",
-      server.nodeEnv === "development" ? error.message : undefined,
+      server.nodeEnv === "development" ? (error as Error).message : undefined,
     );
   }
 });

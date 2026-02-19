@@ -6,23 +6,34 @@
  */
 
 import nodemailer from "nodemailer";
-import { email as emailConfig, emailMock } from "../config.js";
+import type { Transporter } from "nodemailer";
+import { email as emailConfig, emailMock } from "../config";
+import type {
+  EmailSendResult,
+  DownloadLinkEmailData,
+  OTPEmailData,
+} from "../types/services";
 
 // ============================================================================
 // EMAIL CONFIGURATION
 // ============================================================================
 
-let transporter = null;
+let transporter: Transporter | null = null;
 
 /**
  * Mock email sender for development
  */
-async function mockSendMail(mailOptions) {
+async function mockSendMail(
+  mailOptions: nodemailer.SendMailOptions,
+): Promise<EmailSendResult> {
   console.log("📧 [MOCK EMAIL] - Would send email:");
   console.log("   To:", mailOptions.to);
   console.log("   Subject:", mailOptions.subject);
   console.log("   From:", mailOptions.from);
-  console.log("   Body preview:", mailOptions.text?.substring(0, 100) + "...");
+  console.log(
+    "   Body preview:",
+    (mailOptions.text as string)?.substring(0, 100) + "...",
+  );
 
   return {
     messageId: `mock-${Date.now()}`,
@@ -30,10 +41,9 @@ async function mockSendMail(mailOptions) {
   };
 }
 
-export async function initEmailService() {
-  // For development, allow mock email service
-  const useMockEmail =
-    emailMock.enabled || process.env.NODE_ENV === "development";
+export async function initEmailService(): Promise<boolean> {
+  // Use mock email if explicitly enabled in config
+  const useMockEmail = emailMock.enabled;
 
   if (useMockEmail) {
     console.log("📧 Using mock email service (development mode)");
@@ -43,7 +53,7 @@ export async function initEmailService() {
     transporter = {
       sendMail: mockSendMail,
       verify: () => Promise.resolve(true),
-    };
+    } as unknown as Transporter;
     return true;
   }
 
@@ -76,7 +86,8 @@ export async function initEmailService() {
     console.log("✅ Email service connected");
     return true;
   } catch (error) {
-    console.error("❌ Email service verification failed:", error.message);
+    const err = error as Error;
+    console.error("❌ Email service verification failed:", err.message);
     throw error;
   }
 }
@@ -84,7 +95,7 @@ export async function initEmailService() {
 /**
  * Check if email service is configured
  */
-function isEmailConfigured() {
+function isEmailConfigured(): boolean {
   return transporter !== null;
 }
 
@@ -95,14 +106,17 @@ function isEmailConfigured() {
 /**
  * Send download link email (Channel 1)
  */
-export async function sendDownloadLinkEmail(recipientEmail, data) {
+export async function sendDownloadLinkEmail(
+  recipientEmail: string,
+  data: DownloadLinkEmailData,
+): Promise<EmailSendResult> {
   if (!isEmailConfigured()) {
     throw new Error("Email service not initialized");
   }
 
   const { fileName, fileSize, downloadUrl, expiryMinutes } = data;
 
-  const mailOptions = {
+  const mailOptions: nodemailer.SendMailOptions = {
     from: emailConfig.from,
     to: recipientEmail,
     subject: `Secure file shared with you - ${fileName}`,
@@ -177,11 +191,13 @@ All encryption happens in your browser. Zero-knowledge security.
   };
 
   try {
-    const result = await transporter.sendMail(mailOptions);
+    const result = await transporter!.sendMail(mailOptions);
     console.log(
       `📧 Download link email sent to ${recipientEmail}: ${result.messageId}`,
     );
-    return result;
+    return {
+      messageId: result.messageId,
+    };
   } catch (error) {
     console.error("Failed to send download link email:", error);
     throw error;
@@ -191,16 +207,19 @@ All encryption happens in your browser. Zero-knowledge security.
 /**
  * Send OTP email (Channel 2 - Separate for Security)
  */
-export async function sendOTPEmail(recipientEmail, data) {
+export async function sendOTPEmail(
+  recipientEmail: string,
+  data: OTPEmailData,
+): Promise<EmailSendResult> {
   if (!isEmailConfigured()) {
     throw new Error("Email service not initialized");
   }
 
-  const { fileName, downloadUrl, expiryMinutes, otp } = data;
+  const { fileName, expiryMinutes, otp } = data;
 
   console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
 
-  const mailOptions = {
+  const mailOptions: nodemailer.SendMailOptions = {
     from: emailConfig.from,
     to: recipientEmail,
     subject: "Your one-time password for secure file delivery",
@@ -282,9 +301,11 @@ If you did not expect this email, please ignore it.
   };
 
   try {
-    const result = await transporter.sendMail(mailOptions);
+    const result = await transporter!.sendMail(mailOptions);
     console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
-    return result;
+    return {
+      messageId: result.messageId,
+    };
   } catch (error) {
     console.error("Failed to send OTP email:", error);
     throw error;
@@ -298,12 +319,14 @@ If you did not expect this email, please ignore it.
 /**
  * Send test email for configuration verification
  */
-export async function sendTestEmail(recipientEmail) {
+export async function sendTestEmail(
+  recipientEmail: string,
+): Promise<EmailSendResult> {
   if (!isEmailConfigured()) {
     throw new Error("Email service not initialized");
   }
 
-  const mailOptions = {
+  const mailOptions: nodemailer.SendMailOptions = {
     from: emailConfig.from,
     to: recipientEmail,
     subject: "Secure File Server - Test Email",
@@ -312,9 +335,11 @@ export async function sendTestEmail(recipientEmail) {
   };
 
   try {
-    const result = await transporter.sendMail(mailOptions);
+    const result = await transporter!.sendMail(mailOptions);
     console.log(`🧪 Test email sent to ${recipientEmail}: ${result.messageId}`);
-    return result;
+    return {
+      messageId: result.messageId,
+    };
   } catch (error) {
     console.error("Failed to send test email:", error);
     throw error;

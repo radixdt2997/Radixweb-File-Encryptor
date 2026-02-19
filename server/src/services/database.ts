@@ -5,11 +5,21 @@
  */
 
 import Database from "better-sqlite3";
+import type { Database as DatabaseType } from "better-sqlite3";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { database as dbConfig, logging as loggingConfig } from "../config.js";
-import { v4 as uuidv4 } from "uuid";
+import { database as dbConfig, logging as loggingConfig } from "../config";
+import type {
+  FileRecord,
+  RecipientRecord,
+  CreateFileData,
+  CreateRecipientData,
+  UpdateFileStatusData,
+  DatabaseHealthCheck,
+} from "../types/database";
+import type { DatabaseStats } from "../types/api";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,7 +30,7 @@ const dbPathResolved = path.isAbsolute(dbConfig.path)
   : path.join(__dirname, "../..", dbConfig.path);
 
 // SQLite database instance
-let db = null;
+let db: DatabaseType | null = null;
 if (USE_SQLITE) {
   const dbPath = dbPathResolved;
 
@@ -41,8 +51,8 @@ if (USE_SQLITE) {
             file_path TEXT NOT NULL,
             file_size INTEGER NOT NULL,
             recipient_email TEXT NOT NULL,
-            wrapped_key TEXT NOT NULL,
-            wrapped_key_salt TEXT NOT NULL,
+            wrapped_key BLOB NOT NULL,
+            wrapped_key_salt BLOB NOT NULL,
             otp_hash TEXT NOT NULL,
             expiry_type TEXT NOT NULL,
             expiry_time DATETIME NOT NULL,
@@ -72,8 +82,8 @@ if (USE_SQLITE) {
             file_id TEXT NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
             email TEXT NOT NULL,
             otp_hash TEXT NOT NULL,
-            wrapped_key TEXT NOT NULL,
-            wrapped_key_salt TEXT NOT NULL,
+            wrapped_key BLOB NOT NULL,
+            wrapped_key_salt BLOB NOT NULL,
             otp_verified_at DATETIME,
             downloaded_at DATETIME,
             otp_attempts INTEGER DEFAULT 0,
@@ -96,12 +106,16 @@ if (USE_SQLITE) {
     `);
 
   // Ensure new recipient-related columns exist on files table (idempotent)
-  function ensureColumnExists(tableName, columnName, columnDef) {
-    const infoStmt = db.prepare(`PRAGMA table_info(${tableName})`);
-    const columns = infoStmt.all();
+  function ensureColumnExists(
+    tableName: string,
+    columnName: string,
+    columnDef: string,
+  ): void {
+    const infoStmt = db!.prepare(`PRAGMA table_info(${tableName})`);
+    const columns = infoStmt.all() as Array<{ name: string }>;
     const exists = columns.some((col) => col.name === columnName);
     if (!exists) {
-      db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+      db!.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
     }
   }
 
@@ -116,7 +130,7 @@ if (USE_SQLITE) {
           AND file_id NOT IN (SELECT DISTINCT file_id FROM recipients)
     `);
 
-  const legacyFiles = filesToMigrateStmt.all();
+  const legacyFiles = filesToMigrateStmt.all() as FileRecord[];
 
   if (legacyFiles.length > 0) {
     const insertRecipientStmt = db.prepare(`
@@ -143,9 +157,9 @@ if (USE_SQLITE) {
             WHERE file_id = ?
         `);
 
-    const migrateTxn = db.transaction((rows) => {
+    const migrateTxn = db.transaction((rows: FileRecord[]) => {
       for (const file of rows) {
-        const recipientId = uuidv4();
+        const recipientId = crypto.randomUUID();
 
         insertRecipientStmt.run(
           recipientId,
@@ -186,20 +200,38 @@ if (USE_SQLITE) {
         CREATE INDEX IF NOT EXISTS idx_audit_logs_file_id ON audit_logs(file_id);
       `);
   } catch (idxError) {
-    console.warn("⚠️  Failed to create indexes:", idxError.message);
+    const err = idxError as Error;
+    console.warn("⚠️  Failed to create indexes:", err.message);
   }
 }
 
 // In-memory storage for development
-const files = new Map();
-const auditLogs = [];
-const recipients = new Map(); // recipientId -> recipient record
-const recipientAuditLogs = [];
+const files = new Map<string, FileRecord & { id?: number }>();
+const auditLogs: Array<{
+  id: number;
+  file_id: string;
+  event_type: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: string;
+  created_at: string;
+}> = [];
+const recipients = new Map<string, RecipientRecord>(); // recipientId -> recipient record
+const recipientAuditLogs: Array<{
+  id: string;
+  file_id: string;
+  recipient_id: string;
+  event_type: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: string;
+  created_at: string;
+}> = [];
 
 /**
  * Initialize database
  */
-export async function initDatabase() {
+export async function initDatabase(): Promise<boolean> {
   try {
     if (!USE_SQLITE) {
       // Ensure data directory exists for file storage
@@ -221,7 +253,9 @@ export async function initDatabase() {
 /**
  * Create a new file record
  */
-export async function createFileRecord(data) {
+export async function createFileRecord(
+  data: CreateFileData,
+): Promise<number | string> {
   const {
     fileId,
     fileName,
@@ -239,25 +273,7 @@ export async function createFileRecord(data) {
     Date.now() + expiryMinutes * 60 * 1000,
   ).toISOString();
 
-  const record = {
-    file_id: fileId,
-    file_name: fileName,
-    file_path: filePath,
-    file_size: fileSize,
-    recipient_email: recipientEmail,
-    wrapped_key: wrappedKey,
-    wrapped_key_salt: wrappedKeySalt,
-    otp_hash: otpHash,
-    expiry_type: expiryType,
-    expiry_time: expiryTime,
-    status: "active",
-    otp_attempts: 0,
-    last_attempt_at: null,
-    created_at: new Date().toISOString(),
-    downloaded_at: null,
-  };
-
-  if (USE_SQLITE) {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO files (file_id, file_name, file_path, file_size, recipient_email, 
                         wrapped_key, wrapped_key_salt, otp_hash, expiry_type, expiry_time)
@@ -275,8 +291,25 @@ export async function createFileRecord(data) {
       expiryType,
       expiryTime,
     );
-    return result.lastInsertRowid;
+    return Number(result.lastInsertRowid);
   } else {
+    const record: FileRecord & { id?: number } = {
+      file_id: fileId,
+      file_name: fileName,
+      file_path: filePath,
+      file_size: fileSize,
+      recipient_email: recipientEmail,
+      wrapped_key: wrappedKey,
+      wrapped_key_salt: wrappedKeySalt,
+      otp_hash: otpHash,
+      expiry_type: expiryType,
+      expiry_time: expiryTime,
+      status: "active",
+      otp_attempts: 0,
+      last_attempt_at: null,
+      created_at: new Date().toISOString(),
+      downloaded_at: null,
+    };
     record.id = Date.now();
     files.set(fileId, record);
     return record.id;
@@ -286,10 +319,13 @@ export async function createFileRecord(data) {
 /**
  * Get file record by fileId
  */
-export async function getFileRecord(fileId) {
-  if (USE_SQLITE) {
+export async function getFileRecord(
+  fileId: string,
+): Promise<FileRecord | null> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare("SELECT * FROM files WHERE file_id = ?");
-    return stmt.get(fileId) || null;
+    const result = stmt.get(fileId) as FileRecord | undefined;
+    return result || null;
   } else {
     return files.get(fileId) || null;
   }
@@ -298,17 +334,21 @@ export async function getFileRecord(fileId) {
 /**
  * Get file record by fileId (alias)
  */
-export async function getFileById(fileId) {
+export async function getFileById(fileId: string): Promise<FileRecord | null> {
   return getFileRecord(fileId);
 }
 
 /**
  * Update file status
  */
-export async function updateFileStatus(fileId, status, additionalData = {}) {
-  if (USE_SQLITE) {
-    const updates = [];
-    const values = [];
+export async function updateFileStatus(
+  fileId: string,
+  status: string | null,
+  additionalData: UpdateFileStatusData = {},
+): Promise<void> {
+  if (USE_SQLITE && db) {
+    const updates: string[] = [];
+    const values: unknown[] = [];
 
     if (status) {
       updates.push("status = ?");
@@ -341,7 +381,7 @@ export async function updateFileStatus(fileId, status, additionalData = {}) {
     if (!file) return;
 
     if (status) {
-      file.status = status;
+      file.status = status as "active" | "used" | "expired";
     }
 
     if (additionalData.downloadedAt) {
@@ -363,7 +403,7 @@ export async function updateFileStatus(fileId, status, additionalData = {}) {
 /**
  * Check if file is expired
  */
-export async function isFileExpired(fileId) {
+export async function isFileExpired(fileId: string): Promise<boolean> {
   const file = await getFileRecord(fileId);
   if (!file) return true;
 
@@ -376,17 +416,18 @@ export async function isFileExpired(fileId) {
 /**
  * Health check for database
  */
-export async function healthCheck() {
+export async function healthCheck(): Promise<DatabaseHealthCheck> {
   try {
-    if (USE_SQLITE) {
+    if (USE_SQLITE && db) {
       db.prepare("SELECT 1").get();
     }
     return { status: "healthy", database: "connected" };
   } catch (error) {
+    const err = error as Error;
     return {
       status: "unhealthy",
       database: "disconnected",
-      error: error.message,
+      error: err.message,
     };
   }
 }
@@ -394,8 +435,8 @@ export async function healthCheck() {
 /**
  * Get database statistics
  */
-export async function getDatabaseStats() {
-  if (USE_SQLITE) {
+export async function getDatabaseStats(): Promise<DatabaseStats> {
+  if (USE_SQLITE && db) {
     const activeStmt = db.prepare(
       "SELECT COUNT(*) as count FROM files WHERE status = 'active'",
     );
@@ -410,12 +451,18 @@ export async function getDatabaseStats() {
     );
     const logsStmt = db.prepare("SELECT COUNT(*) as count FROM audit_logs");
 
+    const activeResult = activeStmt.get() as { count: number };
+    const usedResult = usedStmt.get() as { count: number };
+    const expiredResult = expiredStmt.get() as { count: number };
+    const sizeResult = sizeStmt.get() as { total: number | null };
+    const logsResult = logsStmt.get() as { count: number };
+
     return {
-      active_files: activeStmt.get().count,
-      used_files: usedStmt.get().count,
-      expired_files: expiredStmt.get().count,
-      total_logs: logsStmt.get().count,
-      total_size_bytes: sizeStmt.get().total || 0,
+      active_files: activeResult.count,
+      used_files: usedResult.count,
+      expired_files: expiredResult.count,
+      total_logs: logsResult.count,
+      total_size_bytes: sizeResult.total || 0,
     };
   } else {
     const allFiles = Array.from(files.values());
@@ -435,8 +482,8 @@ export async function getDatabaseStats() {
 /**
  * Increment OTP attempts counter
  */
-export async function incrementOTPAttempts(fileId) {
-  if (USE_SQLITE) {
+export async function incrementOTPAttempts(fileId: string): Promise<void> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       UPDATE files 
       SET otp_attempts = otp_attempts + 1, last_attempt_at = CURRENT_TIMESTAMP 
@@ -457,8 +504,11 @@ export async function incrementOTPAttempts(fileId) {
 /**
  * Update file record
  */
-export async function updateFileRecord(fileId, updates) {
-  if (USE_SQLITE) {
+export async function updateFileRecord(
+  fileId: string,
+  updates: Partial<FileRecord>,
+): Promise<void> {
+  if (USE_SQLITE && db) {
     const fields = Object.keys(updates)
       .map((key) => `${key} = ?`)
       .join(", ");
@@ -477,9 +527,11 @@ export async function updateFileRecord(fileId, updates) {
 /**
  * Create a recipient record
  */
-export async function createRecipientRecord(data) {
+export async function createRecipientRecord(
+  data: CreateRecipientData,
+): Promise<string> {
   const {
-    id = uuidv4(),
+    id = crypto.randomUUID(),
     fileId,
     email,
     otpHash,
@@ -493,7 +545,7 @@ export async function createRecipientRecord(data) {
 
   const createdAt = new Date().toISOString();
 
-  if (USE_SQLITE) {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO recipients (
         id,
@@ -510,13 +562,21 @@ export async function createRecipientRecord(data) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Convert string to Buffer if needed for SQLite
+    const wrappedKeyBuffer =
+      typeof wrappedKey === "string" ? Buffer.from(wrappedKey, "base64") : wrappedKey;
+    const wrappedKeySaltBuffer =
+      typeof wrappedKeySalt === "string"
+        ? Buffer.from(wrappedKeySalt, "base64")
+        : wrappedKeySalt;
+
     stmt.run(
       id,
       fileId,
       email,
       otpHash,
-      wrappedKey,
-      wrappedKeySalt,
+      wrappedKeyBuffer,
+      wrappedKeySaltBuffer,
       otpVerifiedAt,
       downloadedAt,
       otpAttempts,
@@ -524,13 +584,17 @@ export async function createRecipientRecord(data) {
       createdAt,
     );
   } else {
-    const record = {
+    const record: RecipientRecord = {
       id,
       file_id: fileId,
       email,
       otp_hash: otpHash,
-      wrapped_key: wrappedKey,
-      wrapped_key_salt: wrappedKeySalt,
+      wrapped_key:
+        typeof wrappedKey === "string" ? wrappedKey : wrappedKey.toString("base64"),
+      wrapped_key_salt:
+        typeof wrappedKeySalt === "string"
+          ? wrappedKeySalt
+          : wrappedKeySalt.toString("base64"),
       otp_verified_at: otpVerifiedAt,
       downloaded_at: downloadedAt,
       otp_attempts: otpAttempts,
@@ -546,26 +610,34 @@ export async function createRecipientRecord(data) {
 /**
  * Get all recipients for a file
  */
-export async function getRecipientsByFileId(fileId) {
-  if (USE_SQLITE) {
+export async function getRecipientsByFileId(
+  fileId: string,
+): Promise<RecipientRecord[]> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(
       "SELECT * FROM recipients WHERE file_id = ? ORDER BY created_at ASC",
     );
-    return stmt.all(fileId);
+    return stmt.all(fileId) as RecipientRecord[];
   } else {
-    return Array.from(recipients.values()).filter((r) => r.file_id === fileId);
+    return Array.from(recipients.values()).filter(
+      (r) => r.file_id === fileId,
+    );
   }
 }
 
 /**
  * Get recipient by fileId and email
  */
-export async function getRecipientByFileAndEmail(fileId, email) {
-  if (USE_SQLITE) {
+export async function getRecipientByFileAndEmail(
+  fileId: string,
+  email: string,
+): Promise<RecipientRecord | null> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(
       "SELECT * FROM recipients WHERE file_id = ? AND email = ?",
     );
-    return stmt.get(fileId, email) || null;
+    const result = stmt.get(fileId, email) as RecipientRecord | undefined;
+    return result || null;
   } else {
     return (
       Array.from(recipients.values()).find(
@@ -578,8 +650,11 @@ export async function getRecipientByFileAndEmail(fileId, email) {
 /**
  * Update recipient record
  */
-export async function updateRecipientRecord(recipientId, updates) {
-  if (USE_SQLITE) {
+export async function updateRecipientRecord(
+  recipientId: string,
+  updates: Partial<RecipientRecord>,
+): Promise<void> {
+  if (USE_SQLITE && db) {
     const fields = Object.keys(updates)
       .map((key) => `${key} = ?`)
       .join(", ");
@@ -597,8 +672,11 @@ export async function updateRecipientRecord(recipientId, updates) {
 /**
  * Delete recipient (used for access revocation)
  */
-export async function deleteRecipient(fileId, recipientId) {
-  if (USE_SQLITE) {
+export async function deleteRecipient(
+  fileId: string,
+  recipientId: string,
+): Promise<void> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(
       "DELETE FROM recipients WHERE id = ? AND file_id = ?",
     );
@@ -613,8 +691,10 @@ export async function deleteRecipient(fileId, recipientId) {
 /**
  * Increment recipient OTP attempts counter
  */
-export async function incrementRecipientOTPAttempts(recipientId) {
-  if (USE_SQLITE) {
+export async function incrementRecipientOTPAttempts(
+  recipientId: string,
+): Promise<void> {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       UPDATE recipients 
       SET otp_attempts = otp_attempts + 1, last_attempt_at = CURRENT_TIMESTAMP 
@@ -634,15 +714,15 @@ export async function incrementRecipientOTPAttempts(recipientId) {
  * Log audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logAuditEvent(
-  fileId,
-  eventType,
-  ipAddress,
-  userAgent,
-  details = {},
-) {
+  fileId: string,
+  eventType: string,
+  ipAddress: string | null,
+  userAgent: string | null,
+  details: Record<string, unknown> = {},
+): Promise<void> {
   if (!loggingConfig.auditEnabled) return;
 
-  if (USE_SQLITE) {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO audit_logs (file_id, event_type, ip_address, user_agent, details)
       VALUES (?, ?, ?, ?, ?)
@@ -667,16 +747,16 @@ export async function logAuditEvent(
  * Log recipient audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logRecipientAuditEvent(
-  fileId,
-  recipientId,
-  eventType,
-  ipAddress,
-  userAgent,
-  details = {},
-) {
+  fileId: string,
+  recipientId: string,
+  eventType: string,
+  ipAddress: string | null,
+  userAgent: string | null,
+  details: Record<string, unknown> = {},
+): Promise<void> {
   if (!loggingConfig.auditEnabled) return;
 
-  if (USE_SQLITE) {
+  if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO recipient_audit_logs (
         id,
@@ -690,7 +770,7 @@ export async function logRecipientAuditEvent(
     `);
 
     stmt.run(
-      uuidv4(),
+      crypto.randomUUID(),
       fileId,
       recipientId,
       eventType,
@@ -700,7 +780,7 @@ export async function logRecipientAuditEvent(
     );
   } else {
     const logEntry = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       file_id: fileId,
       recipient_id: recipientId,
       event_type: eventType,
@@ -717,7 +797,7 @@ export async function logRecipientAuditEvent(
 /**
  * Close database connection
  */
-export function closeDatabase() {
+export function closeDatabase(): void {
   if (USE_SQLITE && db) {
     db.close();
   }

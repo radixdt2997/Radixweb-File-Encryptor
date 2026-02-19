@@ -1,13 +1,15 @@
 import express from "express";
+import type { Request, Response } from "express";
 import { param, validationResult } from "express-validator";
-import { sendError } from "../lib/errorResponse.js";
+import { sendError } from "../lib/errorResponse";
 import {
   deleteRecipient,
   getRecipientsByFileId,
   logRecipientAuditEvent,
-} from "../services/database.js";
+} from "../services/database";
+import type { RecipientsListResponse } from "../types/api";
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 const fileIdParam = param("fileId")
   .matches(
@@ -20,39 +22,51 @@ const recipientIdParam = param("recipientId")
   .withMessage("Valid recipient ID is required");
 
 // GET /api/files/:fileId/recipients - list recipients for a file (sender-only in future)
-router.get("/:fileId/recipients", fileIdParam, async (req, res) => {
-  // Validate params
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return sendError(res, 400, "Validation Error", "Invalid request parameters", errors.array());
-  }
+router.get(
+  "/:fileId/recipients",
+  fileIdParam,
+  async (
+    req: Request<{ fileId: string }>,
+    res: Response<RecipientsListResponse | { error: string; message: string; details?: unknown }>,
+  ) => {
+    // Validate params
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return sendError(res, 400, "Validation Error", "Invalid request parameters", errors.array());
+    }
 
-  const { fileId } = req.params;
+    const { fileId } = req.params;
 
-  try {
-    const recipients = await getRecipientsByFileId(fileId);
+    try {
+      const recipients = await getRecipientsByFileId(fileId);
 
-    const response = recipients.map((r) => ({
-      id: r.id,
-      email: r.email,
-      otpAttempts: r.otp_attempts,
-      createdAt: r.created_at,
-      downloadedAt: r.downloaded_at,
-      otpVerifiedAt: r.otp_verified_at,
-    }));
+      const response: RecipientsListResponse = {
+        recipients: recipients.map((r) => ({
+          id: r.id,
+          email: r.email,
+          otpAttempts: r.otp_attempts,
+          createdAt: r.created_at,
+          downloadedAt: r.downloaded_at,
+          otpVerifiedAt: r.otp_verified_at,
+        })),
+      };
 
-    return res.status(200).json({ recipients: response });
-  } catch (error) {
-    console.error("Error listing recipients:", error);
-    return sendError(res, 500, "Recipient Listing Failed", "Failed to fetch recipients for this file");
-  }
-});
+      return res.status(200).json(response);
+    } catch (error) {
+      console.error("Error listing recipients:", error);
+      return sendError(res, 500, "Recipient Listing Failed", "Failed to fetch recipients for this file");
+    }
+  },
+);
 
 // DELETE /api/files/:fileId/recipients/:recipientId - revoke access (by deleting recipient)
 router.delete(
   "/:fileId/recipients/:recipientId",
   [fileIdParam, recipientIdParam],
-  async (req, res) => {
+  async (
+    req: Request<{ fileId: string; recipientId: string }>,
+    res: Response<{ success: boolean; message: string } | { error: string; message: string; details?: unknown }>,
+  ) => {
     // Validate params
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -66,8 +80,8 @@ router.delete(
         fileId,
         recipientId,
         "revoked",
-        req.ip,
-        req.get("User-Agent"),
+        req.ip || "unknown",
+        req.get("User-Agent") || "unknown",
         {},
       );
 

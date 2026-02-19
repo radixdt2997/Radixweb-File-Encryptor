@@ -6,7 +6,7 @@
  */
 
 import cors from "cors";
-import express from "express";
+import express, { type Express, type Request, type Response, type ErrorRequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import multer from "multer";
@@ -17,22 +17,22 @@ import {
   server,
   storage,
   validateConfiguration,
-} from "./config.js";
+} from "./config";
 
 // Routes
-import downloadRoutes from "./routes/download.js";
-import healthRoutes from "./routes/health.js";
-import metadataRoutes from "./routes/metadata.js";
-import testEmailRoutes from "./routes/test-email.js";
-import uploadRoutes from "./routes/upload.js";
-import verifyRoutes from "./routes/verify-otp.js";
-import recipientsRoutes from "./routes/recipients.js";
+import downloadRoutes from "./routes/download";
+import healthRoutes from "./routes/health";
+import metadataRoutes from "./routes/metadata";
+import testEmailRoutes from "./routes/test-email";
+import uploadRoutes from "./routes/upload";
+import verifyRoutes from "./routes/verify-otp";
+import recipientsRoutes from "./routes/recipients";
 
 // Services
-import { sendError } from "./lib/errorResponse.js";
-import { closeDatabase, initDatabase } from "./services/database.js";
-import { initEmailService } from "./services/email.js";
-import { ensureDirectories } from "./services/file-storage.js";
+import { sendError } from "./lib/errorResponse";
+import { closeDatabase, initDatabase } from "./services/database";
+import { initEmailService } from "./services/email";
+import { ensureDirectories } from "./services/file-storage";
 
 // Configuration from config module
 const PORT = server.port;
@@ -43,7 +43,7 @@ const corsOrigins = security.corsOrigin.includes(",")
   : [security.corsOrigin];
 
 // Initialize Express app
-const app = express();
+const app: Express = express();
 
 // ============================================================================
 // SECURITY MIDDLEWARE
@@ -106,12 +106,12 @@ app.use("/api/verify-otp", strictLimiter);
 
 // Upload-specific limiter to protect file upload endpoint from abuse
 const uploadLimiter = rateLimit({
-  windowMs: parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS) || 20, // 20 uploads per window
+  windowMs: parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
+  max: parseInt(process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS || "20", 10), // 20 uploads per window
   message: {
     error: "Too many uploads from this IP, please try again later.",
     retryAfter: Math.ceil(
-      (parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) /
+      (parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000", 10)) /
         1000,
     ),
   },
@@ -122,14 +122,14 @@ const uploadLimiter = rateLimit({
 // File access limiter (metadata, download) to prevent enumeration and brute-force
 const fileAccessLimiter = rateLimit({
   windowMs:
-    parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute
-  max: parseInt(process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS) || 30, // 30 file accesses per minute
+    parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000", 10), // 1 minute
+  max: parseInt(process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS || "30", 10), // 30 file accesses per minute
   message: {
     error:
       "Too many file access requests from this IP, please try again later.",
     retryAfter: Math.ceil(
-      (parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS) ||
-        1 * 60 * 1000) / 1000,
+      (parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000", 10)) /
+        1000,
     ),
   },
   standardHeaders: true,
@@ -139,15 +139,15 @@ const fileAccessLimiter = rateLimit({
 // Recipient list access limiter
 const recipientAccessLimiter = rateLimit({
   windowMs:
-    parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS) ||
+    parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000", 10) ||
     15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS) || 5, // 5 requests per window
+  max: parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS || "5", 10), // 5 requests per window
   message: {
     error:
       "Too many recipient access attempts from this IP, please try again later.",
     retryAfter: Math.ceil(
-      (parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS) ||
-        15 * 60 * 1000) / 1000,
+      (parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000", 10)) /
+        1000,
     ),
   },
   standardHeaders: true,
@@ -163,7 +163,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Request logging
-app.use((req, res, next) => {
+app.use((req: Request, _res: Response, next) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
   next();
@@ -180,14 +180,14 @@ const upload = multer({
   limits: {
     fileSize: maxFileSize,
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     // Allow encrypted files and key data (all sent as blobs from client)
     if (
       ["encryptedData", "wrappedKey", "wrappedKeySalt"].includes(file.fieldname)
     ) {
       cb(null, true);
     } else {
-      cb(new Error(`Unexpected file field: ${file.fieldname}`), false);
+      cb(new Error(`Unexpected file field: ${file.fieldname}`));
     }
   },
 });
@@ -231,7 +231,7 @@ app.use("/api/files", recipientAccessLimiter, recipientsRoutes);
 // ============================================================================
 
 // 404 handler
-app.use((req, res) => {
+app.use((req: Request, res: Response) => {
   sendError(
     res,
     404,
@@ -241,7 +241,7 @@ app.use((req, res) => {
 });
 
 // Global error handler
-app.use((error, req, res, next) => {
+const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   console.error("Error:", error);
 
   // Mongoose validation error
@@ -260,19 +260,21 @@ app.use((error, req, res, next) => {
   }
 
   // Default error response
-  sendError(
+  return sendError(
     res,
-    error.status || 500,
+    (error as { status?: number }).status || 500,
     "Internal Server Error",
     NODE_ENV === "development" ? error.message : "Something went wrong",
   );
-});
+};
+
+app.use(errorHandler);
 
 // ============================================================================
 // SERVER INITIALIZATION
 // ============================================================================
 
-async function startServer() {
+async function startServer(): Promise<void> {
   try {
     console.log("🚀 Starting Secure File Server...");
 
@@ -293,7 +295,7 @@ async function startServer() {
       await initEmailService();
       console.log("✅ Email service initialized");
     } catch (emailError) {
-      console.warn("⚠️  Email service not configured:", emailError.message);
+      console.warn("⚠️  Email service not configured:", (emailError as Error).message);
     }
 
     // Start server

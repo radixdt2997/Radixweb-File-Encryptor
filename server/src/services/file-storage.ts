@@ -9,7 +9,13 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import { storage } from "../config.js";
+import { storage } from "../config";
+import type {
+  FileStorageResult,
+  FileMetadata,
+  StorageHealthCheck,
+} from "../types/services";
+import type { StorageStats } from "../types/api";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,7 +33,7 @@ const FILE_RETENTION_DAYS = storage.retentionDays;
 /**
  * Ensure all required directories exist
  */
-export async function ensureDirectories() {
+export async function ensureDirectories(): Promise<void> {
   const dirs = [
     STORAGE_PATH,
     path.join(__dirname, "../../data"),
@@ -38,7 +44,8 @@ export async function ensureDirectories() {
     try {
       await fs.mkdir(dir, { recursive: true });
     } catch (error) {
-      if (error.code !== "EEXIST") {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== "EEXIST") {
         throw error;
       }
     }
@@ -48,7 +55,7 @@ export async function ensureDirectories() {
 /**
  * Generate unique filename for stored file
  */
-function generateUniqueFilename(originalFilename) {
+function generateUniqueFilename(originalFilename: string): string {
   const timestamp = Date.now();
   const random = crypto.randomBytes(8).toString("hex");
   const extension = path.extname(originalFilename) || ".enc";
@@ -62,7 +69,11 @@ function generateUniqueFilename(originalFilename) {
 /**
  * Save uploaded encrypted file to storage
  */
-export async function saveFile(fileBuffer, originalFilename, metadata = {}) {
+export async function saveFile(
+  fileBuffer: Buffer,
+  originalFilename: string,
+  _metadata: Record<string, unknown> = {},
+): Promise<FileStorageResult> {
   try {
     // Validate file size
     if (fileBuffer.length > MAX_FILE_SIZE) {
@@ -101,7 +112,7 @@ export async function saveFile(fileBuffer, originalFilename, metadata = {}) {
 /**
  * Read file from storage
  */
-export async function readFile(filename) {
+export async function readFile(filename: string): Promise<Buffer> {
   try {
     const filePath = path.join(STORAGE_PATH, filename);
 
@@ -113,7 +124,8 @@ export async function readFile(filename) {
 
     return buffer;
   } catch (error) {
-    if (error.code === "ENOENT") {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
       throw new Error("File not found");
     }
     console.error("Failed to read file:", error);
@@ -124,14 +136,15 @@ export async function readFile(filename) {
 /**
  * Delete file from storage
  */
-export async function deleteFile(filename) {
+export async function deleteFile(filename: string): Promise<boolean> {
   try {
     const filePath = path.join(STORAGE_PATH, filename);
     await fs.unlink(filePath);
     console.log(`🗑️  Deleted file: ${filename}`);
     return true;
   } catch (error) {
-    if (error.code === "ENOENT") {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
       console.warn(`File not found for deletion: ${filename}`);
       return false;
     }
@@ -143,7 +156,7 @@ export async function deleteFile(filename) {
 /**
  * Get file metadata without reading content
  */
-export async function getFileMetadata(filename) {
+export async function getFileMetadata(filename: string): Promise<FileMetadata> {
   try {
     const filePath = path.join(STORAGE_PATH, filename);
     const stats = await fs.stat(filePath);
@@ -157,8 +170,9 @@ export async function getFileMetadata(filename) {
       exists: true,
     };
   } catch (error) {
-    if (error.code === "ENOENT") {
-      return { filename, exists: false };
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
+      return { filename, path: path.join(STORAGE_PATH, filename), size: 0, createdAt: new Date(), modifiedAt: new Date(), exists: false };
     }
     throw error;
   }
@@ -171,7 +185,7 @@ export async function getFileMetadata(filename) {
 /**
  * Clean up old files based on retention policy
  */
-export async function cleanupOldFiles() {
+export async function cleanupOldFiles(): Promise<number> {
   try {
     const files = await fs.readdir(STORAGE_PATH);
     const now = Date.now();
@@ -202,7 +216,7 @@ export async function cleanupOldFiles() {
 /**
  * Get storage statistics
  */
-export async function getStorageStats() {
+export async function getStorageStats(): Promise<StorageStats> {
   try {
     const files = await fs.readdir(STORAGE_PATH);
     let totalSize = 0;
@@ -236,17 +250,19 @@ export async function getStorageStats() {
 /**
  * Create read stream for large files
  */
-export function createReadStream(filename) {
+export async function createReadStream(filename: string): Promise<NodeJS.ReadableStream> {
   const filePath = path.join(STORAGE_PATH, filename);
-  return fs.createReadStream(filePath);
+  const fsSync = await import("fs");
+  return fsSync.createReadStream(filePath) as unknown as NodeJS.ReadableStream;
 }
 
 /**
  * Create write stream for large files
  */
-export function createWriteStream(filename) {
+export async function createWriteStream(filename: string): Promise<NodeJS.WritableStream> {
   const filePath = path.join(STORAGE_PATH, filename);
-  return fs.createWriteStream(filePath);
+  const fsSync = await import("fs");
+  return fsSync.createWriteStream(filePath) as unknown as NodeJS.WritableStream;
 }
 
 // ============================================================================
@@ -256,7 +272,7 @@ export function createWriteStream(filename) {
 /**
  * Storage health check
  */
-export async function healthCheck() {
+export async function healthCheck(): Promise<StorageHealthCheck> {
   try {
     // Test directory access
     await fs.access(STORAGE_PATH);
@@ -275,10 +291,11 @@ export async function healthCheck() {
       stats,
     };
   } catch (error) {
+    const err = error as Error;
     return {
       status: "unhealthy",
       storage: "inaccessible",
-      error: error.message,
+      error: err.message,
     };
   }
 }
