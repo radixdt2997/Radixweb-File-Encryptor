@@ -10,7 +10,9 @@
         "start": "node dist/app.js",
         "dev": "nodemon",
         "test": "jest",
-        "type-check": "tsc --noEmit"
+        "type-check": "tsc --noEmit",
+        "verify-encryption": "tsx scripts/verify-encryption.ts",
+        "migrate-encryption-at-rest": "tsx scripts/migrate-encryption-at-rest.ts"
     },
     "keywords": [
         "encryption",

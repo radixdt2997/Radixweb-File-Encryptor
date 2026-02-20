@@ -10,7 +10,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { database as dbConfig, logging as loggingConfig } from "../config";
+import { database as dbConfig, encryption as encryptionConfig, logging as loggingConfig } from "../config";
+import { decryptDbField, encryptDbField } from "../lib/encryption";
 import type {
   FileRecord,
   RecipientRecord,
@@ -22,6 +23,28 @@ import type {
 import type { DatabaseStats } from "../types/api";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Version byte for encryption-at-rest; legacy rows have no prefix or different value. */
+const DB_ENCRYPTED_VERSION = 0x01;
+
+function encryptForDb(plain: Buffer): Buffer {
+  if (!encryptionConfig.enabled || !encryptionConfig.masterKey) return plain;
+  return Buffer.concat([
+    Buffer.from([DB_ENCRYPTED_VERSION]),
+    encryptDbField(plain),
+  ]);
+}
+
+function decryptFromDb(stored: Buffer): Buffer {
+  if (stored.length > 0 && stored[0] === DB_ENCRYPTED_VERSION) {
+    return decryptDbField(stored.subarray(1));
+  }
+  return stored;
+}
+
+function toBuffer(value: Buffer | string): Buffer {
+  return Buffer.isBuffer(value) ? value : Buffer.from(value, "base64");
+}
 
 // Use config for SQLite vs in-memory and DB path
 const USE_SQLITE = dbConfig.useSqlite;
@@ -273,6 +296,11 @@ export async function createFileRecord(
     Date.now() + expiryMinutes * 60 * 1000,
   ).toISOString();
 
+  const wrappedKeyBuf = Buffer.isBuffer(wrappedKey) ? wrappedKey : Buffer.from(wrappedKey);
+  const wrappedKeySaltBuf = Buffer.isBuffer(wrappedKeySalt) ? wrappedKeySalt : Buffer.from(wrappedKeySalt);
+  const storedWrappedKey = encryptForDb(wrappedKeyBuf);
+  const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuf);
+
   if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO files (file_id, file_name, file_path, file_size, recipient_email, 
@@ -285,8 +313,8 @@ export async function createFileRecord(
       filePath,
       fileSize,
       recipientEmail,
-      wrappedKey,
-      wrappedKeySalt,
+      storedWrappedKey,
+      storedWrappedKeySalt,
       otpHash,
       expiryType,
       expiryTime,
@@ -299,8 +327,8 @@ export async function createFileRecord(
       file_path: filePath,
       file_size: fileSize,
       recipient_email: recipientEmail,
-      wrapped_key: wrappedKey,
-      wrapped_key_salt: wrappedKeySalt,
+      wrapped_key: storedWrappedKey,
+      wrapped_key_salt: storedWrappedKeySalt,
       otp_hash: otpHash,
       expiry_type: expiryType,
       expiry_time: expiryTime,
@@ -316,6 +344,14 @@ export async function createFileRecord(
   }
 }
 
+function decryptFileRecord(raw: FileRecord): FileRecord {
+  return {
+    ...raw,
+    wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
+    wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
+  };
+}
+
 /**
  * Get file record by fileId
  */
@@ -325,9 +361,10 @@ export async function getFileRecord(
   if (USE_SQLITE && db) {
     const stmt = db.prepare("SELECT * FROM files WHERE file_id = ?");
     const result = stmt.get(fileId) as FileRecord | undefined;
-    return result || null;
+    return result ? decryptFileRecord(result) : null;
   } else {
-    return files.get(fileId) || null;
+    const raw = files.get(fileId);
+    return raw ? decryptFileRecord(raw) : null;
   }
 }
 
@@ -545,6 +582,15 @@ export async function createRecipientRecord(
 
   const createdAt = new Date().toISOString();
 
+  const wrappedKeyBuffer =
+    typeof wrappedKey === "string" ? Buffer.from(wrappedKey, "base64") : wrappedKey;
+  const wrappedKeySaltBuffer =
+    typeof wrappedKeySalt === "string"
+      ? Buffer.from(wrappedKeySalt, "base64")
+      : wrappedKeySalt;
+  const storedWrappedKey = encryptForDb(wrappedKeyBuffer);
+  const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuffer);
+
   if (USE_SQLITE && db) {
     const stmt = db.prepare(`
       INSERT INTO recipients (
@@ -562,21 +608,13 @@ export async function createRecipientRecord(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Convert string to Buffer if needed for SQLite
-    const wrappedKeyBuffer =
-      typeof wrappedKey === "string" ? Buffer.from(wrappedKey, "base64") : wrappedKey;
-    const wrappedKeySaltBuffer =
-      typeof wrappedKeySalt === "string"
-        ? Buffer.from(wrappedKeySalt, "base64")
-        : wrappedKeySalt;
-
     stmt.run(
       id,
       fileId,
       email,
       otpHash,
-      wrappedKeyBuffer,
-      wrappedKeySaltBuffer,
+      storedWrappedKey,
+      storedWrappedKeySalt,
       otpVerifiedAt,
       downloadedAt,
       otpAttempts,
@@ -589,12 +627,8 @@ export async function createRecipientRecord(
       file_id: fileId,
       email,
       otp_hash: otpHash,
-      wrapped_key:
-        typeof wrappedKey === "string" ? wrappedKey : wrappedKey.toString("base64"),
-      wrapped_key_salt:
-        typeof wrappedKeySalt === "string"
-          ? wrappedKeySalt
-          : wrappedKeySalt.toString("base64"),
+      wrapped_key: storedWrappedKey,
+      wrapped_key_salt: storedWrappedKeySalt,
       otp_verified_at: otpVerifiedAt,
       downloaded_at: downloadedAt,
       otp_attempts: otpAttempts,
@@ -607,6 +641,14 @@ export async function createRecipientRecord(
   return id;
 }
 
+function decryptRecipientRecord(raw: RecipientRecord): RecipientRecord {
+  return {
+    ...raw,
+    wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
+    wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
+  };
+}
+
 /**
  * Get all recipients for a file
  */
@@ -617,11 +659,12 @@ export async function getRecipientsByFileId(
     const stmt = db.prepare(
       "SELECT * FROM recipients WHERE file_id = ? ORDER BY created_at ASC",
     );
-    return stmt.all(fileId) as RecipientRecord[];
+    const rows = stmt.all(fileId) as RecipientRecord[];
+    return rows.map(decryptRecipientRecord);
   } else {
-    return Array.from(recipients.values()).filter(
-      (r) => r.file_id === fileId,
-    );
+    return Array.from(recipients.values())
+      .filter((r) => r.file_id === fileId)
+      .map(decryptRecipientRecord);
   }
 }
 
@@ -637,13 +680,12 @@ export async function getRecipientByFileAndEmail(
       "SELECT * FROM recipients WHERE file_id = ? AND email = ?",
     );
     const result = stmt.get(fileId, email) as RecipientRecord | undefined;
-    return result || null;
+    return result ? decryptRecipientRecord(result) : null;
   } else {
-    return (
-      Array.from(recipients.values()).find(
-        (r) => r.file_id === fileId && r.email === email,
-      ) || null
+    const raw = Array.from(recipients.values()).find(
+      (r) => r.file_id === fileId && r.email === email,
     );
+    return raw ? decryptRecipientRecord(raw) : null;
   }
 }
 

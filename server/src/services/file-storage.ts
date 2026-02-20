@@ -9,7 +9,12 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import { storage } from "../config";
+import { encryption, storage } from "../config";
+import {
+  decryptFilePayload,
+  encryptFilePayload,
+  ENCRYPTED_HEADER_LENGTH,
+} from "../lib/encryption";
 import type {
   FileStorageResult,
   FileMetadata,
@@ -86,12 +91,18 @@ export async function saveFile(
     const filename = generateUniqueFilename(originalFilename);
     const filePath = path.join(STORAGE_PATH, filename);
 
+    // Encrypt at rest when enabled (payload written to disk may be larger)
+    const payloadToWrite =
+      encryption.enabled && encryption.masterKey
+        ? encryptFilePayload(fileBuffer)
+        : fileBuffer;
+
     // Write file to disk
-    await fs.writeFile(filePath, fileBuffer);
+    await fs.writeFile(filePath, payloadToWrite);
 
     // Verify file was written correctly
     const stats = await fs.stat(filePath);
-    if (stats.size !== fileBuffer.length) {
+    if (stats.size !== payloadToWrite.length) {
       throw new Error("File write verification failed");
     }
 
@@ -120,9 +131,19 @@ export async function readFile(filename: string): Promise<Buffer> {
     await fs.access(filePath);
 
     // Read file
-    const buffer = await fs.readFile(filePath);
+    const raw = await fs.readFile(filePath);
 
-    return buffer;
+    // Decrypt at rest when enabled and payload looks like our encrypted format
+    if (
+      encryption.enabled &&
+      encryption.masterKey &&
+      raw.length >= ENCRYPTED_HEADER_LENGTH
+    ) {
+      const decrypted = decryptFilePayload(raw);
+      if (decrypted !== raw) return decrypted;
+    }
+
+    return raw;
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === "ENOENT") {

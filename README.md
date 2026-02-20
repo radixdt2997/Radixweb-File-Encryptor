@@ -14,7 +14,9 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 ✅ **Email Delivery** - Automatic link and OTP delivery via two-channel security  
 ✅ **Environment Configuration** - Easy deployment across environments  
 ✅ **Rate Limiting** - Built-in protection against abuse  
-✅ **Multi-Recipient Support** - Share with multiple recipients securely
+✅ **Multi-Recipient Support** - Share with multiple recipients securely  
+✅ **API Documentation** - Swagger UI at `/api-docs` (OpenAPI 3.0)  
+✅ **Encryption at Rest** - Optional server-side encryption for files and DB (AES-256-GCM, HKDF)
 
 ## Quick Start
 
@@ -30,7 +32,7 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 cd client
 
 # Setup
-cp .env.example .env.local
+cp .env.example .env
 npm install
 
 # Development
@@ -47,7 +49,7 @@ npm run build
 cd server
 
 # Setup
-cp .env.example .env.development
+cp .env.example .env
 npm install
 
 # Development (with disabled rate limits for testing)
@@ -131,13 +133,29 @@ This approach follows security best practices where even if one email account is
 
 ## API Endpoints
 
-```
-POST /api/upload          # Upload encrypted file + wrapped key
-POST /api/verify-otp      # Verify OTP and get wrapped key
-GET  /api/download/:id    # Download encrypted file
-GET  /api/metadata/:id    # Get file metadata
-GET  /api/health          # Health check
-```
+| Method   | Path                                         | Description                                                                                                                                                                                                                        |
+| -------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/health`                                | Health check (DB, storage, stats). No auth.                                                                                                                                                                                        |
+| `POST`   | `/api/test-email`                            | Send test email (development only). Body: `{ "email": "..." }`.                                                                                                                                                                    |
+| `POST`   | `/api/upload`                                | Upload encrypted file + wrapped keys. Multipart: `encryptedData`, `wrappedKey`, `wrappedKeySalt`; form fields: `fileName`, `expiryMinutes`, `expiryType`, optional `recipients` (JSON) or legacy `recipientEmail`/`otp`/`otpHash`. |
+| `POST`   | `/api/verify-otp`                            | Verify OTP and get wrapped key. Body: `{ "fileId", "otp", "recipientEmail"?(multi-recipient) }`.                                                                                                                                   |
+| `GET`    | `/api/download/:fileId`                      | Download encrypted file (after OTP verified). Returns binary.                                                                                                                                                                      |
+| `GET`    | `/api/metadata/:fileId`                      | Get file metadata (name, size, expiry). No auth.                                                                                                                                                                                   |
+| `GET`    | `/api/files/:fileId/recipients`              | List recipients for a file.                                                                                                                                                                                                        |
+| `DELETE` | `/api/files/:fileId/recipients/:recipientId` | Revoke a recipient.                                                                                                                                                                                                                |
+
+All API routes are rate-limited. See Security Features below for limits.
+
+### Swagger / OpenAPI Documentation
+
+When the server is running, interactive API docs are available at:
+
+- **Swagger UI:** [http://localhost:3000/api-docs](http://localhost:3000/api-docs) (or your `API_BASE_URL` + `/api-docs`)
+- **OpenAPI JSON:** `GET /api-docs.json` for the raw OpenAPI 3.0 spec
+
+Swagger is **enabled by default in development** and **disabled in production** unless `SWAGGER_ENABLED=true`. Use it to explore endpoints, request/response schemas, and try requests. The spec documents all paths above plus error shapes and validation rules.
+
+For **optional server-side encryption at rest** (files on disk and sensitive DB columns), see [Encryption at Rest (Optional)](#encryption-at-rest-optional) under Security Features.
 
 ## Configuration
 
@@ -197,6 +215,8 @@ For **production**, see `server/.env.example` for production rate limiting setti
 
 ## Security Features
 
+For detailed explanations of the cryptographic and security concepts used (AES-256-GCM, PBKDF2, SHA-256, HKDF, IV/salt, constant-time comparison, etc.) and why they were chosen, see **[SECURITY.md](SECURITY.md)**.
+
 ### Encryption & Key Management
 
 - **AES-256-GCM Encryption** - 256-bit authenticated encryption with random IVs
@@ -224,6 +244,41 @@ For **production**, see `server/.env.example` for production rate limiting setti
 - **Indexed Queries** - Performance optimization on sensitive fields
 - **Audit Logging** - Per-recipient and per-file access tracking
 - **Automatic Cleanup** - Expired files automatically removed
+
+### Encryption at Rest (Optional)
+
+The server can encrypt data **on disk** in addition to the existing zero-knowledge client-side encryption. This does not change the client flow: files are still encrypted in the browser before upload; the server only adds a second layer for storage.
+
+**What is encrypted when enabled:**
+
+- **File storage**: Each file blob on disk is encrypted with a server-derived key (AES-256-GCM) before `fs.writeFile`. On read, the blob is decrypted so the API still returns the same client-encrypted payload.
+- **Database**: Sensitive columns (`wrapped_key`, `wrapped_key_salt`) are encrypted before INSERT and decrypted after SELECT. Legacy rows without the version byte are read as plaintext for backward compatibility.
+
+**Key hierarchy:**
+
+- **Master key (KEK)**: Set via `ENCRYPTION_MASTER_KEY` (32 bytes as 64 hex or 44 base64 chars). In production, use a secret manager or KMS; do not commit the key.
+- **Data encryption keys (DEK)**: Derived from the master key with HKDF (separate keys for file storage and DB). No DEKs are stored on disk.
+
+**Environment variables:**
+
+| Variable                | Description                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `ENCRYPTION_MASTER_KEY` | 32-byte key as 64 hex chars or 44 base64 chars. Required when encryption at rest is enabled. |
+| `ENCRYPTION_ENABLED`    | Set to `true` to enable. Default is `false` for safe rollout.                                |
+
+**Migration:** Existing files and DB rows remain readable (legacy format). To encrypt them, set `ENCRYPTION_MASTER_KEY` and `ENCRYPTION_ENABLED=true`, then run:
+
+```bash
+cd server && pnpm run migrate-encryption-at-rest
+```
+
+Alternatively, leave legacy data as-is; it will be removed by retention. New data will be encrypted at rest once the feature is enabled.
+
+**Security notes:**
+
+- **No key or plaintext logging** – The master key and decrypted content are never logged.
+- **Key rotation** – To rotate the master key: derive new DEKs, re-encrypt existing data with the new DEKs (e.g. run the migration script with the new key after writing a script that decrypts with the old key and encrypts with the new), then switch to the new master key.
+- **Full-disk encryption** – Use OS- or hardware-level full-disk encryption on the server as an additional layer; encryption at rest protects against exposure of raw disk or backups.
 
 ### Infrastructure
 
@@ -347,6 +402,8 @@ DEBUG=* npm start
 ```
 
 ## Security Considerations
+
+For security and crypto concepts (AES-256-GCM, PBKDF2, SHA-256, HKDF, etc.), see [SECURITY.md](SECURITY.md).
 
 ### ✅ Safe Practices
 

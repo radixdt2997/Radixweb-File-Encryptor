@@ -6,7 +6,12 @@
  */
 
 import cors from "cors";
-import express, { type Express, type Request, type Response, type ErrorRequestHandler } from "express";
+import express, {
+  type Express,
+  type Request,
+  type Response,
+  type ErrorRequestHandler,
+} from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import multer from "multer";
@@ -108,14 +113,11 @@ app.use("/api/verify-otp", strictLimiter);
 
 // Upload-specific limiter to protect file upload endpoint from abuse
 const uploadLimiter = rateLimit({
-  windowMs: parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
-  max: parseInt(process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS || "20", 10), // 20 uploads per window
+  windowMs: security.uploadLimitWindowMs,
+  max: security.uploadLimitMaxRequests,
   message: {
     error: "Too many uploads from this IP, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000", 10)) /
-        1000,
-    ),
+    retryAfter: Math.ceil(security.uploadLimitWindowMs / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -123,16 +125,12 @@ const uploadLimiter = rateLimit({
 
 // File access limiter (metadata, download) to prevent enumeration and brute-force
 const fileAccessLimiter = rateLimit({
-  windowMs:
-    parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000", 10), // 1 minute
-  max: parseInt(process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS || "30", 10), // 30 file accesses per minute
+  windowMs: security.fileAccessLimitWindowMs,
+  max: security.fileAccessLimitMaxRequests,
   message: {
     error:
       "Too many file access requests from this IP, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000", 10)) /
-        1000,
-    ),
+    retryAfter: Math.ceil(security.fileAccessLimitWindowMs / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -140,17 +138,12 @@ const fileAccessLimiter = rateLimit({
 
 // Recipient list access limiter
 const recipientAccessLimiter = rateLimit({
-  windowMs:
-    parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000", 10) ||
-    15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS || "5", 10), // 5 requests per window
+  windowMs: security.recipientAccessLimitWindowMs,
+  max: security.recipientAccessLimitMaxRequests,
   message: {
     error:
       "Too many recipient access attempts from this IP, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000", 10)) /
-        1000,
-    ),
+    retryAfter: Math.ceil(security.recipientAccessLimitWindowMs / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -201,10 +194,13 @@ const upload = multer({
 if (server.docsEnabled) {
   const openApiSpec = getOpenApiSpec(server.baseUrl);
   app.use("/api-docs", swaggerUi.serve);
-  app.get("/api-docs", swaggerUi.setup(openApiSpec, {
-    customSiteTitle: "Secure File Server API",
-    customCss: ".swagger-ui .topbar { display: none }",
-  }));
+  app.get(
+    "/api-docs",
+    swaggerUi.setup(openApiSpec, {
+      customSiteTitle: "Secure File Server API",
+      customCss: ".swagger-ui .topbar { display: none }",
+    }),
+  );
   app.get("/api-docs.json", (_req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/json");
     res.send(openApiSpec);
@@ -299,7 +295,10 @@ async function startServer(): Promise<void> {
 
     validateConfiguration();
     console.log("✅ Configuration validated");
-    console.log("📋 Config summary:", JSON.stringify(getConfigSummary(), null, 2));
+    console.log(
+      "📋 Config summary:",
+      JSON.stringify(getConfigSummary(), null, 2),
+    );
 
     // Ensure required directories exist
     await ensureDirectories();
@@ -314,7 +313,10 @@ async function startServer(): Promise<void> {
       await initEmailService();
       console.log("✅ Email service initialized");
     } catch (emailError) {
-      console.warn("⚠️  Email service not configured:", (emailError as Error).message);
+      console.warn(
+        "⚠️  Email service not configured:",
+        (emailError as Error).message,
+      );
     }
 
     // Start server

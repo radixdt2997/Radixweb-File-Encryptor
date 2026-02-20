@@ -7,17 +7,17 @@
 
 import dotenv from "dotenv";
 import type {
-  ServerConfig,
-  DatabaseConfig,
-  StorageConfig,
-  EmailConfig,
-  SecurityConfig,
-  EmailMockConfig,
-  LoggingConfig,
   ConfigSummary,
+  DatabaseConfig,
+  EmailConfig,
+  EmailMockConfig,
+  EncryptionConfig,
+  LoggingConfig,
+  SecurityConfig,
+  ServerConfig,
+  StorageConfig,
 } from "./types/config";
 
-// Load environment variables
 dotenv.config();
 
 // ============================================================================
@@ -26,7 +26,10 @@ dotenv.config();
 
 const port = parseInt(process.env.PORT || "3000", 10);
 
-const nodeEnv = (process.env.NODE_ENV || "development") as "development" | "production" | "test";
+const nodeEnv = (process.env.NODE_ENV || "development") as
+  | "development"
+  | "production"
+  | "test";
 const swaggerEnabledEnv = process.env.SWAGGER_ENABLED === "true";
 
 export const server: ServerConfig = {
@@ -48,8 +51,7 @@ export const server: ServerConfig = {
 export const database: DatabaseConfig = {
   path: process.env.DB_PATH || "./data/secure-files.db",
   useSqlite:
-    process.env.USE_SQLITE === "true" ||
-    process.env.NODE_ENV === "production",
+    process.env.USE_SQLITE === "true" || process.env.NODE_ENV === "production",
 };
 
 // ============================================================================
@@ -60,6 +62,31 @@ export const storage: StorageConfig = {
   path: process.env.STORAGE_PATH || "./data/uploads",
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "104857600", 10), // 100MB
   retentionDays: parseInt(process.env.FILE_RETENTION_DAYS || "30", 10),
+};
+
+// ============================================================================
+// ENCRYPTION AT REST CONFIGURATION
+// ============================================================================
+
+function parseMasterKey(raw: string | undefined): Buffer | null {
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim().replace(/\s/g, "");
+  if (!trimmed) return null;
+  try {
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return Buffer.from(trimmed, "hex");
+    }
+    const decoded = Buffer.from(trimmed, "base64");
+    if (decoded.length === 32) return decoded;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export const encryption: EncryptionConfig = {
+  masterKey: parseMasterKey(process.env.ENCRYPTION_MASTER_KEY),
+  enabled: process.env.ENCRYPTION_ENABLED === "true",
 };
 
 // ============================================================================
@@ -88,11 +115,37 @@ export const email: EmailConfig = {
 export const security: SecurityConfig = {
   corsOrigin:
     process.env.CORS_ORIGIN || "http://localhost:5173,http://127.0.0.1:5173",
-  rateLimitWindowMs:
-    parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
-  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
+  rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
+  rateLimitMaxRequests: parseInt(
+    process.env.RATE_LIMIT_MAX_REQUESTS || "100",
+    10,
+  ),
   otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "3", 10),
   otpCooldownMs: parseInt(process.env.OTP_COOLDOWN_MS || "5000", 10), // 5 seconds
+  uploadLimitWindowMs: parseInt(
+    process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000",
+    10,
+  ), // 15 minutes
+  uploadLimitMaxRequests: parseInt(
+    process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS || "20",
+    10,
+  ),
+  fileAccessLimitWindowMs: parseInt(
+    process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000",
+    10,
+  ), // 1 minute
+  fileAccessLimitMaxRequests: parseInt(
+    process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS || "30",
+    10,
+  ),
+  recipientAccessLimitWindowMs: parseInt(
+    process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000",
+    10,
+  ), // 15 minutes
+  recipientAccessLimitMaxRequests: parseInt(
+    process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS || "5",
+    10,
+  ),
 };
 
 // ============================================================================
@@ -103,7 +156,8 @@ export const emailMock: EmailMockConfig = {
   enabled:
     process.env.USE_MOCK_EMAIL !== "false" &&
     (process.env.USE_MOCK_EMAIL === "true" ||
-      (process.env.NODE_ENV === "development" && process.env.USE_MOCK_EMAIL === undefined)),
+      (process.env.NODE_ENV === "development" &&
+        process.env.USE_MOCK_EMAIL === undefined)),
 };
 
 // ============================================================================
@@ -162,6 +216,10 @@ export function getConfigSummary(): ConfigSummary {
       level: logging.level,
       auditEnabled: logging.auditEnabled,
     },
+    encryption: {
+      enabled: encryption.enabled,
+      keyConfigured: encryption.masterKey !== null,
+    },
   };
 }
 
@@ -188,6 +246,13 @@ export function validateConfiguration(): boolean {
   if (!isEmailConfigured()) {
     console.warn(
       "⚠️  Email service not configured - file sharing will work but no emails will be sent",
+    );
+  }
+
+  // Encryption at rest: require master key when enabled
+  if (encryption.enabled && !encryption.masterKey) {
+    errors.push(
+      "ENCRYPTION_ENABLED is true but ENCRYPTION_MASTER_KEY is missing or invalid (must be 32 bytes: 64 hex chars or 44 base64 chars)",
     );
   }
 
