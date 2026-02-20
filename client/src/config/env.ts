@@ -1,6 +1,12 @@
 /**
- * Environment configuration with validation
- * All environment variables should be defined here
+ * Environment configuration – single source of truth for client env.
+ *
+ * - Vite loads `.env` from the client folder automatically. Create a `.env` file
+ *   (e.g. by copying `.env.example`) to override defaults.
+ * - Only variables prefixed with `VITE_` are exposed to the client.
+ * - All client code must read env through this module (e.g. `import { env } from "../config/env"`).
+ *   Do not use `import.meta.env` elsewhere.
+ * - If `.env` is missing, defaults below are used so the app still runs (e.g. in dev).
  */
 
 /**
@@ -8,17 +14,19 @@
  */
 const getEnvString = (key: string, defaultValue: string): string => {
   const value = import.meta.env[key];
-  return value !== undefined ? value : defaultValue;
+  return value !== undefined && value !== "" ? String(value) : defaultValue;
 };
 
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const value = import.meta.env[key];
-  return value !== undefined ? Number(value) : defaultValue;
+  if (value === undefined || value === "") return defaultValue;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : defaultValue;
 };
 
 const getEnvBoolean = (key: string, defaultValue: boolean): boolean => {
   const value = import.meta.env[key];
-  if (value === undefined) return defaultValue;
+  if (value === undefined || value === "") return defaultValue;
   return value === "true" || value === "1" || value === "yes";
 };
 
