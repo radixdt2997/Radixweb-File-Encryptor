@@ -66,6 +66,15 @@ export interface SecurityConfig {
   rateLimitMaxRequests: number;
   otpMaxAttempts: number;
   otpCooldownMs: number;
+  /** Upload rate limit: window (ms) and max requests per window */
+  uploadLimitWindowMs: number;
+  uploadLimitMaxRequests: number;
+  /** File access (metadata, download) rate limit */
+  fileAccessLimitWindowMs: number;
+  fileAccessLimitMaxRequests: number;
+  /** Recipient list access rate limit */
+  recipientAccessLimitWindowMs: number;
+  recipientAccessLimitMaxRequests: number;
 }
 
 /**

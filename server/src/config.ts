@@ -122,6 +122,30 @@ export const security: SecurityConfig = {
   ),
   otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "3", 10),
   otpCooldownMs: parseInt(process.env.OTP_COOLDOWN_MS || "5000", 10), // 5 seconds
+  uploadLimitWindowMs: parseInt(
+    process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || "900000",
+    10,
+  ), // 15 minutes
+  uploadLimitMaxRequests: parseInt(
+    process.env.UPLOAD_RATE_LIMIT_MAX_REQUESTS || "20",
+    10,
+  ),
+  fileAccessLimitWindowMs: parseInt(
+    process.env.FILE_ACCESS_RATE_LIMIT_WINDOW_MS || "60000",
+    10,
+  ), // 1 minute
+  fileAccessLimitMaxRequests: parseInt(
+    process.env.FILE_ACCESS_RATE_LIMIT_MAX_REQUESTS || "30",
+    10,
+  ),
+  recipientAccessLimitWindowMs: parseInt(
+    process.env.RECIPIENT_ACCESS_RATE_LIMIT_WINDOW_MS || "900000",
+    10,
+  ), // 15 minutes
+  recipientAccessLimitMaxRequests: parseInt(
+    process.env.RECIPIENT_ACCESS_RATE_LIMIT_MAX_REQUESTS || "5",
+    10,
+  ),
 };
 
 // ============================================================================
