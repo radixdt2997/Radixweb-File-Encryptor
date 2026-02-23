@@ -20,6 +20,7 @@ import {
   encryptDbField,
   ENCRYPTED_HEADER_LENGTH,
 } from "../src/lib/encryption";
+import { closeDatabase, getPool } from "../src/services/database";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,64 +58,65 @@ async function main() {
   }
   console.log(`Migrated ${fileCount} file(s) on disk.`);
 
-  // --- Migrate DB (SQLite only) ---
-  const resolvedDb = path.isAbsolute(database.path)
-    ? database.path
-    : path.join(__dirname, "..", database.path);
-
+  // --- Migrate DB (PostgreSQL) ---
   let filesUpdated = 0;
   let recipientsUpdated = 0;
 
-  try {
-    const Database = (await import("better-sqlite3")).default;
-    const db = new Database(resolvedDb);
+  if (!database.databaseUrl || database.databaseUrl.trim() === "") {
+    console.error("DATABASE_URL is not set; skipping DB migration.");
+  } else {
+    try {
+      const pool = getPool();
 
-    const fileRows = db.prepare("SELECT file_id, wrapped_key, wrapped_key_salt FROM files").all() as Array<{
-      file_id: string;
-      wrapped_key: Buffer;
-      wrapped_key_salt: Buffer;
-    }>;
+      const fileResult = await pool.query(
+        "SELECT file_id, wrapped_key, wrapped_key_salt FROM files",
+      );
+      const fileRows = fileResult.rows as Array<{
+        file_id: string;
+        wrapped_key: Buffer;
+        wrapped_key_salt: Buffer;
+      }>;
 
-    const updateFileStmt = db.prepare(
-      "UPDATE files SET wrapped_key = ?, wrapped_key_salt = ? WHERE file_id = ?",
-    );
+      for (const row of fileRows) {
+        const wk = Buffer.isBuffer(row.wrapped_key) ? row.wrapped_key : Buffer.from(row.wrapped_key);
+        const wks = Buffer.isBuffer(row.wrapped_key_salt) ? row.wrapped_key_salt : Buffer.from(row.wrapped_key_salt);
+        if (wk.length > 0 && wk[0] === DB_ENCRYPTED_VERSION) continue;
+        const encWk = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wk)]);
+        const encWks = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wks)]);
+        await pool.query(
+          "UPDATE files SET wrapped_key = $1, wrapped_key_salt = $2 WHERE file_id = $3",
+          [encWk, encWks, row.file_id],
+        );
+        filesUpdated++;
+      }
 
-    for (const row of fileRows) {
-      const wk = Buffer.isBuffer(row.wrapped_key) ? row.wrapped_key : Buffer.from(row.wrapped_key);
-      const wks = Buffer.isBuffer(row.wrapped_key_salt) ? row.wrapped_key_salt : Buffer.from(row.wrapped_key_salt);
-      if (wk.length > 0 && wk[0] === DB_ENCRYPTED_VERSION) continue;
-      const encWk = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wk)]);
-      const encWks = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wks)]);
-      updateFileStmt.run(encWk, encWks, row.file_id);
-      filesUpdated++;
+      const recipientResult = await pool.query(
+        "SELECT id, file_id, wrapped_key, wrapped_key_salt FROM recipients",
+      );
+      const recipientRows = recipientResult.rows as Array<{
+        id: string;
+        file_id: string;
+        wrapped_key: Buffer;
+        wrapped_key_salt: Buffer;
+      }>;
+
+      for (const row of recipientRows) {
+        const wk = Buffer.isBuffer(row.wrapped_key) ? row.wrapped_key : Buffer.from(row.wrapped_key);
+        const wks = Buffer.isBuffer(row.wrapped_key_salt) ? row.wrapped_key_salt : Buffer.from(row.wrapped_key_salt);
+        if (wk.length > 0 && wk[0] === DB_ENCRYPTED_VERSION) continue;
+        const encWk = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wk)]);
+        const encWks = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wks)]);
+        await pool.query(
+          "UPDATE recipients SET wrapped_key = $1, wrapped_key_salt = $2 WHERE id = $3 AND file_id = $4",
+          [encWk, encWks, row.id, row.file_id],
+        );
+        recipientsUpdated++;
+      }
+
+      closeDatabase();
+    } catch (err) {
+      console.error("DB migration error:", err);
     }
-
-    const recipientRows = db
-      .prepare("SELECT id, file_id, wrapped_key, wrapped_key_salt FROM recipients")
-      .all() as Array<{
-      id: string;
-      file_id: string;
-      wrapped_key: Buffer;
-      wrapped_key_salt: Buffer;
-    }>;
-
-    const updateRecipientStmt = db.prepare(
-      "UPDATE recipients SET wrapped_key = ?, wrapped_key_salt = ? WHERE id = ? AND file_id = ?",
-    );
-
-    for (const row of recipientRows) {
-      const wk = Buffer.isBuffer(row.wrapped_key) ? row.wrapped_key : Buffer.from(row.wrapped_key);
-      const wks = Buffer.isBuffer(row.wrapped_key_salt) ? row.wrapped_key_salt : Buffer.from(row.wrapped_key_salt);
-      if (wk.length > 0 && wk[0] === DB_ENCRYPTED_VERSION) continue;
-      const encWk = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wk)]);
-      const encWks = Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(wks)]);
-      updateRecipientStmt.run(encWk, encWks, row.id, row.file_id);
-      recipientsUpdated++;
-    }
-
-    db.close();
-  } catch (err) {
-    console.error("DB migration error:", err);
   }
 
   console.log(`Migrated ${filesUpdated} file record(s) and ${recipientsUpdated} recipient(s) in DB.`);

@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import type { RecipientInfo, SenderState } from "../types";
 import { api } from "../api/client";
+import { useAuthStore } from "../stores/authStore";
 import { crypto } from "../utils/crypto";
 import { generateOTP, copyToClipboard, formatFileSize } from "../utils/file";
 import { Button } from "./ui/Button";
@@ -17,6 +18,7 @@ interface SenderProps {
 }
 
 export const Sender = ({ onMessage }: SenderProps) => {
+  const token = useAuthStore((s) => s.token);
   const [state, setState] = useState<SenderState>({ file: null, key: null });
   const [emailsText, setEmailsText] = useState("");
   const [result, setResult] = useState<{
@@ -158,7 +160,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
       formData.append("expiryMinutes", expiryMinutes.toString());
       formData.append("expiryType", expiryType);
 
-      const uploadResult = await api.uploadFile(formData);
+      const uploadResult = await api.uploadFile(formData, token);
       setResult({
         link: uploadResult.downloadUrl,
         otps: recipientsPayload.map(({ email, otp }) => ({ email, otp })),
@@ -173,12 +175,13 @@ export const Sender = ({ onMessage }: SenderProps) => {
   }, [
     state.file,
     state.key,
-    emailsText,
     expiryMinutes,
-    expiryType,
     parseEmails,
+    emailsText,
     validateEmails,
     onMessage,
+    expiryType,
+    token,
   ]);
 
   const handleReset = useCallback(() => {
@@ -205,7 +208,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
     }
     try {
       setLoadingRecipients(true);
-      const data = await api.getRecipients(uploadedFileId);
+      const data = await api.getRecipients(uploadedFileId, token);
       setRecipients(data);
       onMessage("Recipients loaded", "success");
     } catch (error) {
@@ -213,20 +216,20 @@ export const Sender = ({ onMessage }: SenderProps) => {
     } finally {
       setLoadingRecipients(false);
     }
-  }, [uploadedFileId, onMessage]);
+  }, [uploadedFileId, token, onMessage]);
 
   const handleRevoke = useCallback(
     async (recipientId: string, email: string) => {
       if (!uploadedFileId) return;
       try {
-        await api.revokeRecipient(uploadedFileId, recipientId);
+        await api.revokeRecipient(uploadedFileId, recipientId, token);
         setRecipients((prev) => prev.filter((r) => r.id !== recipientId));
         onMessage(`Access revoked for ${email}`, "success");
       } catch (error) {
         onMessage(`Revocation failed: ${(error as Error).message}`, "error");
       }
     },
-    [uploadedFileId, onMessage],
+    [uploadedFileId, token, onMessage],
   );
 
   const getRecipientStatus = (recipient: RecipientInfo): string => {

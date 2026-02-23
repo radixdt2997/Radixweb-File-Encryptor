@@ -84,6 +84,26 @@ export interface MetadataResponse {
 }
 
 /**
+ * Response for GET /api/transactions (Phase 6)
+ */
+export interface TransactionsResponse {
+  items: TransactionItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface TransactionItem {
+  fileId: string;
+  fileName: string;
+  uploadedAt: string;
+  expiryTime: string;
+  status: string;
+  recipientCount: number;
+  role: "sender" | "recipient";
+}
+
+/**
  * Response for GET /api/files/:fileId/recipients
  */
 export interface RecipientsListResponse {

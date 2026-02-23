@@ -5,7 +5,19 @@
  */
 
 /**
- * File record structure (matches SQLite schema)
+ * User record (Phase 6 auth)
+ */
+export interface UserRecord {
+  id: string;
+  email: string;
+  password_hash: string;
+  role: "admin" | "user";
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * File record structure (PostgreSQL schema; uploaded_by_user_id for Phase 6)
  */
 export interface FileRecord {
   id?: number;
@@ -27,10 +39,13 @@ export interface FileRecord {
   total_recipients?: number;
   verified_recipients?: number;
   downloaded_recipients?: number;
+  /** Phase 6: user who uploaded the file (null for legacy/migrated rows) */
+  uploaded_by_user_id?: string | null;
 }
 
+
 /**
- * Recipient record structure (matches SQLite schema)
+ * Recipient record structure (matches PostgreSQL schema)
  */
 export interface RecipientRecord {
   id: string;
@@ -87,6 +102,8 @@ export interface CreateFileData {
   otpHash: string;
   expiryMinutes: number;
   expiryType: "one-time" | "time-based";
+  /** Phase 6: user who uploaded (required when auth is enabled) */
+  uploadedByUserId?: string | null;
 }
 
 /**

@@ -41,7 +41,24 @@ export interface RecipientState {
   loaded: boolean;
 }
 
-export type TabType = "sender" | "recipient" | "legacy";
+export type TabType = "sender" | "recipient" | "legacy" | "transactions";
+
+export interface TransactionItem {
+  fileId: string;
+  fileName: string;
+  uploadedAt: string;
+  expiryTime: string;
+  status: string;
+  recipientCount: number;
+  role: "sender" | "recipient";
+}
+
+export interface TransactionsResponse {
+  items: TransactionItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
 export type MessageType = "info" | "success" | "error";
 
 /**

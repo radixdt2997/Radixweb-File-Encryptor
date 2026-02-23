@@ -229,7 +229,8 @@ router.post(
       // Use first recipient's email for legacy files.recipient_email (NOT NULL)
       const primaryRecipientEmail = recipientsPayload[0]!.email;
 
-      // Create database record (legacy fields kept for backward compatibility)
+      // Create database record (Phase 6: uploaded_by_user_id from auth)
+      const userId = (uploadReq as Request & { user?: { id: string } }).user?.id ?? null;
       const recordId = await createFileRecord({
         fileId,
         fileName,
@@ -241,6 +242,7 @@ router.post(
         otpHash: recipientsPayload[0]!.otpHash,
         expiryMinutes,
         expiryType,
+        uploadedByUserId: userId,
       });
       console.log("[UPLOAD] DB record created:", recordId);
 

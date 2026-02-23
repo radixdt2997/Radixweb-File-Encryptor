@@ -1,12 +1,17 @@
-import { useState, useCallback } from "react";
-import type { TabType } from "./types";
-import { useMessage } from "./hooks/useMessage";
-import { Tabs } from "./components/Tabs";
-import { Alert } from "./components/ui/Alert";
-import { Sender } from "./components/Sender";
-import { Recipient } from "./components/Recipient";
+import { useCallback, useEffect, useState } from "react";
+import { api, setAuthErrorHandler } from "./api/client";
 import { Legacy } from "./components/Legacy";
+import { Login } from "./components/Login";
+import { Recipient } from "./components/Recipient";
+import { Sender } from "./components/Sender";
+import { Tabs } from "./components/Tabs";
+import { Transactions } from "./components/Transactions";
+import { Alert } from "./components/ui/Alert";
+import { Button } from "./components/ui/Button";
 import { env } from "./config/env";
+import { useMessage } from "./hooks/useMessage";
+import { useAuthStore } from "./stores/authStore";
+import type { TabType } from "./types";
 
 function App() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -17,6 +22,29 @@ function App() {
   );
   const [fileId] = useState<string | null>(urlFileId);
   const { message, showMessage, clearMessage } = useMessage();
+  const { token, user, logout } = useAuthStore();
+
+  // Rehydrate: validate token on load
+  useEffect(() => {
+    const t = useAuthStore.getState().token;
+    if (!t) return;
+    api
+      .getMe(t)
+      .then((res) => {
+        useAuthStore.getState().setUser(res.user);
+      })
+      .catch(() => {
+        useAuthStore.getState().logout();
+      });
+  }, []);
+
+  // Global 401 handler: logout and show message when session expires
+  useEffect(() => {
+    setAuthErrorHandler(() => {
+      useAuthStore.getState().logout();
+      showMessage("Session expired", "info");
+    });
+  }, [showMessage]);
 
   const handleResetRecipient = () => {
     window.history.replaceState({}, "", window.location.pathname);
@@ -49,6 +77,28 @@ function App() {
                 </p>
               </div>
             </div>
+            {user && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">
+                  {user.email}
+                  {user.role === "admin" && (
+                    <span className="ml-2 text-cyan-400">Admin</span>
+                  )}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    logout();
+                    showMessage("Logged out", "info");
+                  }}
+                  className="text-sm text-gray-400 hover:text-white"
+                >
+                  Log out
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -76,12 +126,33 @@ function App() {
         <Tabs
           activeTab={activeTab}
           onTabChange={handleTabChange}
-          disabledTabs={fileId ? [] : ["recipient"]}
+          disabledTabs={
+            (fileId
+              ? token
+                ? []
+                : ["transactions"]
+              : ["recipient", ...(token ? [] : ["transactions"])]) as TabType[]
+          }
         />
 
-        {/* Tab Content */}
-        <div className="animate-in fade-in duration-300">
-          {activeTab === "sender" && <Sender onMessage={showMessage} />}
+        {/* Tab Content: Send and Transactions require login; Recipient and Legacy do not */}
+        <div className="animate-in fade-in duration-300 pt-2">
+          {activeTab === "sender" && !token && (
+            <Login
+              onSuccess={() => setActiveTab("sender")}
+              onMessage={showMessage}
+            />
+          )}
+          {activeTab === "sender" && token && (
+            <Sender onMessage={showMessage} />
+          )}
+          {activeTab === "transactions" && !token && (
+            <Login
+              onSuccess={() => setActiveTab("transactions")}
+              onMessage={showMessage}
+            />
+          )}
+          {activeTab === "transactions" && token && <Transactions />}
           {activeTab === "recipient" && (
             <Recipient
               fileId={fileId}

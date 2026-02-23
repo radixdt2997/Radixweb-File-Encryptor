@@ -12,13 +12,14 @@ interface TabsProps {
 const tabs: Array<{ id: TabType; label: string; icon: string }> = [
   { id: "sender", label: "Send File", icon: "📤" },
   { id: "recipient", label: "Receive File", icon: "📥" },
+  { id: "transactions", label: "My Transactions", icon: "📋" },
   { id: "legacy", label: "Legacy Mode", icon: "🔑" },
 ];
 
 export const Tabs = React.memo(
   ({ activeTab, onTabChange, disabledTabs = [] }: TabsProps) => {
     return (
-      <div className="flex flex-wrap gap-2 mb-8 p-1 bg-gray-800/50 rounded-lg border border-gray-700 w-fit">
+      <div className="flex flex-wrap gap-2 mb-8 p-1 bg-gray-800/50 rounded-lg border border-gray-700 justify-evenly">
         {tabs.map((tab) => {
           const isDisabled = disabledTabs.includes(tab.id);
           return (
@@ -39,7 +40,9 @@ export const Tabs = React.memo(
               role="tab"
               title={
                 isDisabled
-                  ? "Access this mode through email link only"
+                  ? tab.id === "recipient"
+                    ? "Access this mode through email link only"
+                    : "Log in to access"
                   : undefined
               }
             >

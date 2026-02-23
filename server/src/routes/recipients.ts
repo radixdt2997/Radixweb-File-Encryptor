@@ -4,6 +4,7 @@ import { param, validationResult } from "express-validator";
 import { sendError } from "../lib/errorResponse";
 import {
   deleteRecipient,
+  getFileRecord,
   getRecipientsByFileId,
   logRecipientAuditEvent,
 } from "../services/database";
@@ -21,7 +22,28 @@ const recipientIdParam = param("recipientId")
   .isUUID(4)
   .withMessage("Valid recipient ID is required");
 
-// GET /api/files/:fileId/recipients - list recipients for a file (sender-only in future)
+/** Ensure requester is sender or admin; sends 404/403 and returns false if not allowed. */
+async function ensureCanAccessFile(
+  req: Request,
+  res: Response,
+  fileId: string,
+): Promise<boolean> {
+  const file = await getFileRecord(fileId);
+  if (!file) {
+    sendError(res, 404, "Not found", "File not found");
+    return false;
+  }
+  const userId = req.user?.id;
+  const isAdmin = req.user?.role === "admin";
+  const isSender = file.uploaded_by_user_id != null && file.uploaded_by_user_id === userId;
+  if (!isSender && !isAdmin) {
+    sendError(res, 403, "Forbidden", "Only the sender or an admin can perform this action");
+    return false;
+  }
+  return true;
+}
+
+// GET /api/files/:fileId/recipients - list recipients for a file (sender or admin only)
 router.get(
   "/:fileId/recipients",
   fileIdParam,
@@ -36,6 +58,9 @@ router.get(
     }
 
     const { fileId } = req.params;
+
+    const allowed = await ensureCanAccessFile(req, res, fileId);
+    if (!allowed) return;
 
     try {
       const recipients = await getRecipientsByFileId(fileId);
@@ -74,6 +99,9 @@ router.delete(
     }
 
     const { fileId, recipientId } = req.params;
+
+    const allowed = await ensureCanAccessFile(req, res, fileId);
+    if (!allowed) return;
 
     try {
       await logRecipientAuditEvent(

@@ -18,11 +18,11 @@ export interface ServerConfig {
 }
 
 /**
- * Database configuration
+ * Database configuration (PostgreSQL for Phase 6)
  */
 export interface DatabaseConfig {
-  path: string;
-  useSqlite: boolean;
+  /** PostgreSQL connection URL. Required for Phase 6 (dev and prod use different URLs). */
+  databaseUrl: string;
 }
 
 /**
@@ -78,6 +78,20 @@ export interface SecurityConfig {
 }
 
 /**
+ * Auth configuration (Phase 6)
+ */
+export interface AuthConfig {
+  /** Secret for signing JWTs (required for auth) */
+  jwtSecret: string;
+  /** Access token expiry in seconds (e.g. 900 = 15 min) */
+  jwtExpiresInSeconds: number;
+  /** Allowed email domain for login/register (e.g. radixweb.com) */
+  allowedEmailDomain: string;
+  /** Allow self-registration; if false, only admin can create users */
+  allowSelfRegistration: boolean;
+}
+
+/**
  * Email mock configuration
  */
 export interface EmailMockConfig {
@@ -104,8 +118,7 @@ export interface ConfigSummary {
     docsEnabled: boolean;
   };
   database: {
-    path: string;
-    useSqlite: boolean;
+    databaseUrl: string;
   };
   storage: {
     path: string;
@@ -129,5 +142,10 @@ export interface ConfigSummary {
   encryption?: {
     enabled: boolean;
     keyConfigured: boolean;
+  };
+  auth?: {
+    jwtSecret: boolean;
+    allowedEmailDomain: string;
+    allowSelfRegistration: boolean;
   };
 }
