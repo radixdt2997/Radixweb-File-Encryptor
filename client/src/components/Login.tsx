@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { env } from "../config/env";
 import { useAuthStore } from "../stores/authStore";
@@ -12,11 +13,13 @@ import { Card } from "./ui/Card";
 import { Input } from "./ui/Input";
 
 interface LoginProps {
-  onSuccess: () => void;
   onMessage: (text: string, type: "info" | "success" | "error") => void;
 }
 
-export function Login({ onSuccess, onMessage }: LoginProps) {
+export function Login({ onMessage }: LoginProps) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const returnUrl = searchParams.get("returnUrl");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
@@ -25,7 +28,7 @@ export function Login({ onSuccess, onMessage }: LoginProps) {
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const handleSubmit = useCallback(
-    async (e: React.SubmitEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
       if (!email.trim() || !password) {
         onMessage("Enter email and password", "error");
@@ -38,14 +41,15 @@ export function Login({ onSuccess, onMessage }: LoginProps) {
           : await api.login(email.trim().toLowerCase(), password);
         setAuth(res.token, res.user);
         onMessage(isRegister ? "Account created. Welcome!" : "Logged in.", "success");
-        onSuccess();
+        const target = returnUrl ? decodeURIComponent(returnUrl) : "/send-file";
+        navigate(target, { replace: true });
       } catch (err) {
         onMessage((err as Error).message, "error");
       } finally {
         setLoading(false);
       }
     },
-    [email, password, isRegister, setAuth, onSuccess, onMessage],
+    [email, password, isRegister, setAuth, onMessage, returnUrl, navigate],
   );
 
   return (

@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import type { RecipientInfo, SenderState } from "../types";
 import { api } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
@@ -15,10 +16,13 @@ const RADIX_EMAIL_REGEX = new RegExp(
 
 interface SenderProps {
   onMessage: (text: string, type: "info" | "success" | "error") => void;
+  initialFileId?: string | null;
 }
 
-export const Sender = ({ onMessage }: SenderProps) => {
+export const Sender = ({ onMessage, initialFileId }: SenderProps) => {
+  const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
+  const userEmail = useAuthStore((s) => s.user?.email);
   const [state, setState] = useState<SenderState>({ file: null, key: null });
   const [emailsText, setEmailsText] = useState("");
   const [result, setResult] = useState<{
@@ -35,6 +39,13 @@ export const Sender = ({ onMessage }: SenderProps) => {
   const [expiryType, setExpiryType] = useState<"one-time" | "time-based">(
     "time-based",
   );
+  const autoLoadedForFileId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (initialFileId?.trim() && token) {
+      setUploadedFileId(initialFileId.trim());
+    }
+  }, [initialFileId, token]);
 
   const isEncrypted = state.key !== null;
   const hasFile = state.file !== null;
@@ -118,6 +129,15 @@ export const Sender = ({ onMessage }: SenderProps) => {
       return;
     }
 
+    // Exclude self (no self-send)
+    const recipientOnly = userEmail
+      ? valid.filter((e) => e.toLowerCase() !== userEmail.toLowerCase())
+      : valid;
+    if (recipientOnly.length === 0) {
+      onMessage("You cannot send a file to yourself. Add at least one other recipient.", "error");
+      return;
+    }
+
     try {
       setLoading(true);
       onMessage("📤 Uploading and encrypting for recipients...", "info");
@@ -133,7 +153,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
         wrappedKeySalt: string;
       }> = [];
 
-      for (const email of valid) {
+      for (const email of recipientOnly) {
         const otp = generateOTP();
         const { wrappedKey, salt } = await crypto.wrapKey(state.key, otp);
         const otpHash = await crypto.hashOTP(otp);
@@ -182,6 +202,7 @@ export const Sender = ({ onMessage }: SenderProps) => {
     onMessage,
     expiryType,
     token,
+    userEmail,
   ]);
 
   const handleReset = useCallback(() => {
@@ -191,7 +212,10 @@ export const Sender = ({ onMessage }: SenderProps) => {
     setUploadedFileId(null);
     setRecipients([]);
     onMessage("Reset complete", "info");
-  }, [onMessage]);
+    if (initialFileId) {
+      navigate("/send-file", { replace: true });
+    }
+  }, [onMessage, initialFileId, navigate]);
 
   const handleCopy = useCallback(
     async (text: string, label: string = "text") => {
@@ -213,10 +237,26 @@ export const Sender = ({ onMessage }: SenderProps) => {
       onMessage("Recipients loaded", "success");
     } catch (error) {
       onMessage(`Failed to load: ${(error as Error).message}`, "error");
+      if (initialFileId) {
+        setUploadedFileId(null);
+        setRecipients([]);
+      }
     } finally {
       setLoadingRecipients(false);
     }
-  }, [uploadedFileId, token, onMessage]);
+  }, [uploadedFileId, token, onMessage, initialFileId]);
+
+  useEffect(() => {
+    const fileId = initialFileId?.trim();
+    if (
+      fileId &&
+      uploadedFileId === fileId &&
+      autoLoadedForFileId.current !== fileId
+    ) {
+      autoLoadedForFileId.current = fileId;
+      void loadRecipients();
+    }
+  }, [initialFileId, uploadedFileId, loadRecipients]);
 
   const handleRevoke = useCallback(
     async (recipientId: string, email: string) => {
@@ -370,6 +410,88 @@ export const Sender = ({ onMessage }: SenderProps) => {
             Reset
           </Button>
         </div>
+      )}
+
+      {/* Manage shared file (restored from URL, e.g. My Transactions) */}
+      {uploadedFileId && !result && (
+        <Card
+          title="Manage shared file"
+          subtitle="Revoke access or view recipient attempts"
+          className="border-green-600/50 bg-green-950/20"
+        >
+          <div className="space-y-4">
+            <div className="bg-gray-700/50 p-4 rounded-lg">
+              <p className="text-xs font-semibold text-gray-400 mb-2">
+                SHARE THIS LINK:
+              </p>
+              <div className="flex items-center gap-2 bg-gray-800 p-3 rounded border border-gray-600">
+                <code className="text-xs text-gray-300 flex-1 truncate">
+                  {`${window.location.origin}/receive-file?fileId=${uploadedFileId}`}
+                </code>
+                <Button
+                  onClick={() =>
+                    handleCopy(
+                      `${window.location.origin}/receive-file?fileId=${uploadedFileId}`,
+                      "Link",
+                    )
+                  }
+                  variant="ghost"
+                  size="sm"
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-600 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold">Recipient Access</h4>
+                <Button
+                  onClick={loadRecipients}
+                  isLoading={loadingRecipients}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Refresh
+                </Button>
+              </div>
+
+              {recipients.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  Click Refresh to view recipient status
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {recipients.map((recipient) => (
+                    <div
+                      key={recipient.id}
+                      className="flex items-center justify-between bg-gray-800/50 p-3 rounded border border-gray-600"
+                    >
+                      <div className="text-sm flex-1">
+                        <p className="font-medium text-white">
+                          {recipient.email}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {getRecipientStatus(recipient)} • Attempts:{" "}
+                          {recipient.otpAttempts}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() =>
+                          handleRevoke(recipient.id, recipient.email)
+                        }
+                        variant="danger"
+                        size="sm"
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Success Result */}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { env } from "../config/env";
 import type { FileMetadata } from "../types";
@@ -24,6 +25,7 @@ interface RecipientProps {
 }
 
 export const Recipient = ({ fileId, onMessage, onReset }: RecipientProps) => {
+  const navigate = useNavigate();
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [otp, setOtp] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -43,10 +45,15 @@ export const Recipient = ({ fileId, onMessage, onReset }: RecipientProps) => {
         onMessage("Enter your email and OTP to download.", "success");
       } catch (error) {
         loadedFileIdRef.current = null;
-        onMessage(`Load failed: ${(error as Error).message}`, "error");
+        const message = (error as Error).message;
+        // Only pass message in state; Layout will show toast once after redirect
+        navigate("/send-file", {
+          state: { flashMessage: message, flashType: "error" as const },
+          replace: true,
+        });
       }
     },
-    [onMessage],
+    [onMessage, navigate],
   );
 
   useEffect(() => {

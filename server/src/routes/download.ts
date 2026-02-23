@@ -19,6 +19,7 @@ import {
   updateRecipientRecord,
   logRecipientAuditEvent,
 } from "../services/database";
+import { ExpiryType, FileStatus } from "../types/database";
 import { readFile } from "../services/file-storage";
 
 const router: express.Router = express.Router();
@@ -79,24 +80,24 @@ router.get(
         return sendError(res, 400, "File Expired", "This file has expired and is no longer available");
       }
 
-      // Check if one-time file was already downloaded
-      if (file.expiry_type === "one-time" && file.status === "used") {
+      // Check if one-time file was already downloaded (treat as expired)
+      if (file.expiry_type === ExpiryType.OneTime && file.status !== FileStatus.Active) {
         await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
           reason: "already_used",
         });
 
-        return sendError(res, 400, "File Already Used", "This file has already been downloaded");
+        return sendError(res, 400, "File Expired", "This file has already been downloaded and is no longer available");
+      }
+
+      // Mark one-time as expired immediately so link is dead before we read/send (no race)
+      if (file.expiry_type === ExpiryType.OneTime) {
+        await updateFileStatus(fileId, FileStatus.Expired, {
+          downloadedAt: new Date().toISOString(),
+        });
       }
 
       // Read the encrypted file from storage
       const fileBuffer = await readFile(file.file_path);
-
-      // Mark file as downloaded (for one-time files)
-      if (file.expiry_type === "one-time") {
-        await updateFileStatus(fileId, "used", {
-          downloadedAt: new Date().toISOString(),
-        });
-      }
 
       // Update all recipients' download timestamps (per-recipient audit)
       const recipients = await getRecipientsByFileId(fileId);

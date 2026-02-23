@@ -20,7 +20,7 @@ import type {
   FileMetadata,
   StorageHealthCheck,
 } from "../types/services";
-import type { StorageStats } from "../types/api";
+import { HealthStatus, type StorageStats } from "../types/api";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -193,7 +193,14 @@ export async function getFileMetadata(filename: string): Promise<FileMetadata> {
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === "ENOENT") {
-      return { filename, path: path.join(STORAGE_PATH, filename), size: 0, createdAt: new Date(), modifiedAt: new Date(), exists: false };
+      return {
+        filename,
+        path: path.join(STORAGE_PATH, filename),
+        size: 0,
+        createdAt: new Date(),
+        modifiedAt: new Date(),
+        exists: false,
+      };
     }
     throw error;
   }
@@ -271,7 +278,9 @@ export async function getStorageStats(): Promise<StorageStats> {
 /**
  * Create read stream for large files
  */
-export async function createReadStream(filename: string): Promise<NodeJS.ReadableStream> {
+export async function createReadStream(
+  filename: string,
+): Promise<NodeJS.ReadableStream> {
   const filePath = path.join(STORAGE_PATH, filename);
   const fsSync = await import("fs");
   return fsSync.createReadStream(filePath) as unknown as NodeJS.ReadableStream;
@@ -280,7 +289,9 @@ export async function createReadStream(filename: string): Promise<NodeJS.Readabl
 /**
  * Create write stream for large files
  */
-export async function createWriteStream(filename: string): Promise<NodeJS.WritableStream> {
+export async function createWriteStream(
+  filename: string,
+): Promise<NodeJS.WritableStream> {
   const filePath = path.join(STORAGE_PATH, filename);
   const fsSync = await import("fs");
   return fsSync.createWriteStream(filePath) as unknown as NodeJS.WritableStream;
@@ -307,14 +318,14 @@ export async function healthCheck(): Promise<StorageHealthCheck> {
     const stats = await getStorageStats();
 
     return {
-      status: "healthy",
+      status: HealthStatus.Healthy,
       storage: "accessible",
       stats,
     };
   } catch (error) {
     const err = error as Error;
     return {
-      status: "unhealthy",
+      status: HealthStatus.Unhealthy,
       storage: "inaccessible",
       error: err.message,
     };

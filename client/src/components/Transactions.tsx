@@ -3,12 +3,20 @@
  */
 
 import { useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { Card } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { formatDate } from "../utils/file";
+
+function formatStatus(status: string): string {
+  if (status === "active") return "Active";
+  if (status === "expired") return "Expired";
+  if (status === "used") return "Used";
+  return status;
+}
 
 export function Transactions() {
   const { token, user } = useAuthStore();
@@ -69,7 +77,7 @@ export function Transactions() {
             </label>
           </div>
         )}
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex gap-2 mb-4">
           <Button
             variant={typeFilter === undefined ? "primary" : "secondary"}
             size="sm"
@@ -77,6 +85,7 @@ export function Transactions() {
               setTypeFilter(undefined);
               setPage(1);
             }}
+            fullWidth
           >
             All
           </Button>
@@ -87,6 +96,7 @@ export function Transactions() {
               setTypeFilter("sent");
               setPage(1);
             }}
+            fullWidth
           >
             Sent
           </Button>
@@ -97,6 +107,7 @@ export function Transactions() {
               setTypeFilter("received");
               setPage(1);
             }}
+            fullWidth
           >
             Received
           </Button>
@@ -147,15 +158,31 @@ export function Transactions() {
                         {item.recipientCount} recipient
                         {item.recipientCount !== 1 ? "s" : ""}
                         {" · "}
-                        {item.status}
+                        <span
+                          className={
+                            item.status === "active"
+                              ? "text-green-400"
+                              : "text-amber-400"
+                          }
+                        >
+                          {formatStatus(item.status)}
+                        </span>
                       </p>
                     </div>
-                    <a
-                      href={`?fileId=${item.fileId}`}
-                      className="text-sm text-blue-400 hover:underline"
-                    >
-                      Open
-                    </a>
+                    {item.status === "expired" ? (
+                      <span className="text-sm text-gray-500">Expired</span>
+                    ) : (
+                      <Link
+                        to={
+                          item.role === "sender"
+                            ? `/send-file?fileId=${item.fileId}`
+                            : `/receive-file?fileId=${item.fileId}`
+                        }
+                        className="text-sm text-blue-400 hover:underline"
+                      >
+                        Open
+                      </Link>
+                    )}
                   </div>
                 ))
               )}

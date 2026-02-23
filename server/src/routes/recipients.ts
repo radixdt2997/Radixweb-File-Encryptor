@@ -7,7 +7,9 @@ import {
   getFileRecord,
   getRecipientsByFileId,
   logRecipientAuditEvent,
+  updateFileStatus,
 } from "../services/database";
+import { FileStatus, UserRole } from "../types/database";
 import type { RecipientsListResponse } from "../types/api";
 
 const router: express.Router = express.Router();
@@ -34,7 +36,7 @@ async function ensureCanAccessFile(
     return false;
   }
   const userId = req.user?.id;
-  const isAdmin = req.user?.role === "admin";
+  const isAdmin = req.user?.role === UserRole.Admin;
   const isSender = file.uploaded_by_user_id != null && file.uploaded_by_user_id === userId;
   if (!isSender && !isAdmin) {
     sendError(res, 403, "Forbidden", "Only the sender or an admin can perform this action");
@@ -116,6 +118,12 @@ router.delete(
       // Hard delete recipient for now (simple revocation)
       // Note: future enhancement could use a 'revoked_at' field instead.
       await deleteRecipient(fileId, recipientId);
+
+      // If no recipients left, mark file as expired
+      const remaining = await getRecipientsByFileId(fileId);
+      if (remaining.length === 0) {
+        await updateFileStatus(fileId, FileStatus.Expired);
+      }
 
       return res.status(200).json({
         success: true,

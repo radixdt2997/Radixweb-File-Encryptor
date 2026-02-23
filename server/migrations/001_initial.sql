@@ -2,12 +2,31 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Enum types (create before tables that use them)
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('admin', 'user');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE expiry_type_enum AS ENUM ('one-time', 'time-based');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE file_status AS ENUM ('active', 'used', 'expired');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Users (Phase 6 auth)
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  role user_role NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -25,9 +44,9 @@ CREATE TABLE IF NOT EXISTS files (
   wrapped_key BYTEA NOT NULL,
   wrapped_key_salt BYTEA NOT NULL,
   otp_hash TEXT NOT NULL,
-  expiry_type TEXT NOT NULL CHECK (expiry_type IN ('one-time', 'time-based')),
+  expiry_type expiry_type_enum NOT NULL,
   expiry_time TIMESTAMPTZ NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'used', 'expired')),
+  status file_status NOT NULL DEFAULT 'active',
   otp_attempts INTEGER NOT NULL DEFAULT 0,
   last_attempt_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

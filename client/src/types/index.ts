@@ -41,8 +41,6 @@ export interface RecipientState {
   loaded: boolean;
 }
 
-export type TabType = "sender" | "recipient" | "legacy" | "transactions";
-
 export interface TransactionItem {
   fileId: string;
   fileName: string;

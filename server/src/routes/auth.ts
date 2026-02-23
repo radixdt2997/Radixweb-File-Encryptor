@@ -10,6 +10,7 @@ import { sendError } from "../lib/errorResponse";
 import { hashPassword, signToken, verifyPassword, validateEmailDomain } from "../lib/auth";
 import { createUser, getUserByEmail } from "../services/database";
 import { requireAuth } from "../middleware/auth";
+import { UserRole } from "../types/database";
 
 const router: express.Router = express.Router();
 
@@ -123,7 +124,7 @@ router.post(
     const user = await createUser({
       email: normalizedEmail,
       passwordHash,
-      role: "user",
+      role: UserRole.User,
     });
 
     const token = signToken({

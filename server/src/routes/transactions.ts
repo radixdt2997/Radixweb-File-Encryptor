@@ -10,6 +10,7 @@ import { sendError } from "../lib/errorResponse";
 import { requireAuth } from "../middleware/auth";
 import { getTransactions } from "../services/database";
 import type { TransactionsResponse } from "../types/api";
+import { UserRole } from "../types/database";
 
 const router: express.Router = express.Router();
 
@@ -40,7 +41,7 @@ router.get(
     const limit = Number(req.query.limit) || 20;
     const type = req.query.type as "sent" | "received" | undefined;
     const scope = req.query.scope === "all" ? "all" : undefined;
-    const isAdmin = req.user.role === "admin";
+    const isAdmin = req.user.role === UserRole.Admin;
 
     if (scope === "all" && !isAdmin) {
       sendError(res, 403, "Forbidden", "Only admins can request scope=all");

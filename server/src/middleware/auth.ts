@@ -5,11 +5,12 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../lib/auth";
 import { sendError } from "../lib/errorResponse";
+import { UserRole } from "../types/database";
 
 export interface AuthUser {
   id: string;
   email: string;
-  role: string;
+  role: UserRole;
 }
 
 declare global {
@@ -39,7 +40,7 @@ export function optionalAuth(
     req.user = {
       id: payload.userId,
       email: payload.email,
-      role: payload.role,
+      role: payload.role as UserRole,
     };
   }
   next();
@@ -67,7 +68,7 @@ export function requireAuth(
   req.user = {
     id: payload.userId,
     email: payload.email,
-    role: payload.role,
+    role: payload.role as UserRole,
   };
   next();
 }
@@ -84,7 +85,7 @@ export function requireAdmin(
     sendError(res, 401, "Unauthorized", "Authentication required");
     return;
   }
-  if (req.user.role !== "admin") {
+  if (req.user.role !== UserRole.Admin) {
     sendError(res, 403, "Forbidden", "Admin access required");
     return;
   }

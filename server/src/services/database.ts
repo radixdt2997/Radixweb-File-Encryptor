@@ -25,7 +25,13 @@ import type {
   UpdateFileStatusData,
   DatabaseHealthCheck,
 } from "../types/database";
-import type { DatabaseStats } from "../types/api";
+import {
+  ExpiryType,
+  FileStatus,
+  TransactionRole,
+  UserRole,
+} from "../types/database";
+import { HealthStatus, type DatabaseStats } from "../types/api";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -162,13 +168,12 @@ export async function getFileRecord(
   ]);
   const row = result.rows[0];
   if (!row) return null;
-  return decryptFileRecord({
+  const raw = {
     ...row,
-    file_id: row.file_id,
-    wrapped_key: row.wrapped_key,
-    wrapped_key_salt: row.wrapped_key_salt,
-    uploaded_by_user_id: row.uploaded_by_user_id,
-  });
+    status: row.status as FileStatus,
+    expiry_type: row.expiry_type as ExpiryType,
+  } as FileRecord & { wrapped_key: Buffer; wrapped_key_salt: Buffer };
+  return decryptFileRecord(raw);
 }
 
 export async function getFileById(fileId: string): Promise<FileRecord | null> {
@@ -180,7 +185,7 @@ export async function getFileById(fileId: string): Promise<FileRecord | null> {
  */
 export async function updateFileStatus(
   fileId: string,
-  status: string | null,
+  status: FileStatus | null,
   additionalData: UpdateFileStatusData = {},
 ): Promise<void> {
   const updates: string[] = [];
@@ -219,18 +224,18 @@ export async function isFileExpired(fileId: string): Promise<boolean> {
   if (!file) return true;
   const now = new Date();
   const expiryTime = new Date(file.expiry_time);
-  return now > expiryTime || file.status !== "active";
+  return now > expiryTime || file.status !== FileStatus.Active;
 }
 
 export async function healthCheck(): Promise<DatabaseHealthCheck> {
   try {
     const p = getPool();
     await p.query("SELECT 1");
-    return { status: "healthy", database: "connected" };
+    return { status: HealthStatus.Healthy, database: "connected" };
   } catch (error) {
     const err = error as Error;
     return {
-      status: "unhealthy",
+      status: HealthStatus.Unhealthy,
       database: "disconnected",
       error: err.message,
     };
@@ -240,13 +245,12 @@ export async function healthCheck(): Promise<DatabaseHealthCheck> {
 export async function getDatabaseStats(): Promise<DatabaseStats> {
   const p = getPool();
   const [activeRes, usedRes, expiredRes, sizeRes, logsRes] = await Promise.all([
-    p.query("SELECT COUNT(*)::int AS count FROM files WHERE status = 'active'"),
-    p.query("SELECT COUNT(*)::int AS count FROM files WHERE status = 'used'"),
+    p.query(`SELECT COUNT(*)::int AS count FROM files WHERE status = $1`, [FileStatus.Active]),
+    p.query(`SELECT COUNT(*)::int AS count FROM files WHERE status = $1`, [FileStatus.Used]),
+    p.query(`SELECT COUNT(*)::int AS count FROM files WHERE status = $1`, [FileStatus.Expired]),
     p.query(
-      "SELECT COUNT(*)::int AS count FROM files WHERE status = 'expired'",
-    ),
-    p.query(
-      "SELECT COALESCE(SUM(file_size), 0)::bigint AS total FROM files WHERE status = 'active'",
+      `SELECT COALESCE(SUM(file_size), 0)::bigint AS total FROM files WHERE status = $1`,
+    [FileStatus.Active],
     ),
     p.query("SELECT COUNT(*)::int AS count FROM audit_logs"),
   ]);
@@ -463,7 +467,7 @@ export function closeDatabase(): void {
 export async function createUser(data: {
   email: string;
   passwordHash: string;
-  role: "admin" | "user";
+  role: UserRole;
 }): Promise<UserRecord> {
   const p = getPool();
   const result = await p.query(
@@ -516,7 +520,7 @@ export interface TransactionRow {
   expiry_time: string;
   status: string;
   recipient_count: number;
-  role: "sender" | "recipient";
+  role: TransactionRole;
 }
 
 export async function getTransactions(
@@ -555,7 +559,7 @@ export async function getTransactions(
         expiry_time: String(row.expiry_time),
         status: String(row.status),
         recipient_count: Number(row.recipient_count) || 0,
-        role: "sender" as const,
+        role: TransactionRole.Sender,
       }),
     );
     return { items, total };
@@ -601,7 +605,10 @@ export async function getTransactions(
 
   const items: TransactionRow[] = result.rows.map(
     (row: Record<string, unknown>) => {
-      const isSender = row.uploaded_by_user_id === userId;
+      const role =
+        row.uploaded_by_user_id === userId
+          ? TransactionRole.Sender
+          : TransactionRole.Recipient;
       return {
         file_id: String(row.file_id),
         file_name: String(row.file_name),
@@ -609,7 +616,7 @@ export async function getTransactions(
         expiry_time: String(row.expiry_time),
         status: String(row.status),
         recipient_count: Number(row.recipient_count) || 0,
-        role: isSender ? ("sender" as const) : ("recipient" as const),
+        role,
       };
     },
   );

@@ -19,13 +19,25 @@ import { server, storage } from "../config";
 import { sendError } from "../lib/errorResponse";
 import { sendDownloadLinkEmail, sendOTPEmail } from "../services/email";
 import { saveFile } from "../services/file-storage";
-import type { UploadRequest, UploadResponse, RecipientPayload } from "../types/api";
+import type {
+  UploadRequest,
+  UploadResponse,
+  RecipientPayload,
+} from "../types/api";
+import { ExpiryType } from "../types/database";
 
 const router: express.Router = express.Router();
 const RADIX_EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@radixweb\.com$/;
 
 // Extend Request to include files from multer
-interface UploadRequestWithFiles extends Omit<Request<{}, UploadResponse | { error: string; message: string; details?: unknown }, UploadRequest>, "files"> {
+interface UploadRequestWithFiles extends Omit<
+  Request<
+    {},
+    UploadResponse | { error: string; message: string; details?: unknown },
+    UploadRequest
+  >,
+  "files"
+> {
   files?: {
     encryptedData?: Express.Multer.File[];
     wrappedKey?: Express.Multer.File[];
@@ -65,7 +77,7 @@ const uploadValidation = [
     .withMessage("Expiry minutes must be between 5 and 1440"),
 
   body("expiryType")
-    .isIn(["one-time", "time-based"])
+    .isIn([ExpiryType.OneTime, ExpiryType.TimeBased])
     .withMessage('Expiry type must be "one-time" or "time-based"'),
 
   // New: recipients JSON payload (optional but validated if present)
@@ -78,12 +90,7 @@ const uploadValidation = [
           throw new Error("Recipients must be a non-empty array");
         }
         for (const r of parsed) {
-          if (
-            !r.email ||
-            !r.otpHash ||
-            !r.wrappedKey ||
-            !r.wrappedKeySalt
-          ) {
+          if (!r.email || !r.otpHash || !r.wrappedKey || !r.wrappedKeySalt) {
             throw new Error(
               "Each recipient must include email, otpHash, wrappedKey, wrappedKeySalt",
             );
@@ -104,8 +111,14 @@ router.post(
   "/",
   uploadValidation,
   async (
-    req: Request<{}, UploadResponse | { error: string; message: string; details?: unknown }, UploadRequest>,
-    res: Response<UploadResponse | { error: string; message: string; details?: unknown }>,
+    req: Request<
+      {},
+      UploadResponse | { error: string; message: string; details?: unknown },
+      UploadRequest
+    >,
+    res: Response<
+      UploadResponse | { error: string; message: string; details?: unknown }
+    >,
   ) => {
     const uploadReq = req as UploadRequestWithFiles;
     console.log("[UPLOAD] Handler entered");
@@ -118,7 +131,13 @@ router.post(
     console.log("[UPLOAD] Validation results:", errors);
 
     if (!errors.isEmpty()) {
-      return sendError(res, 400, "Validation Error", "Invalid request data", errors.array());
+      return sendError(
+        res,
+        400,
+        "Validation Error",
+        "Invalid request data",
+        errors.array(),
+      );
     }
 
     try {
@@ -177,14 +196,10 @@ router.post(
       console.log("[UPLOAD] Generated fileId:", fileId);
 
       // Save encrypted file to storage
-      const fileResult = await saveFile(
-        encryptedDataFile.buffer,
-        fileName,
-        {
-          expiryMinutes,
-          expiryType,
-        },
-      );
+      const fileResult = await saveFile(encryptedDataFile.buffer, fileName, {
+        expiryMinutes,
+        expiryType,
+      });
       console.log("[UPLOAD] File saved:", fileResult);
 
       // Extract binary data from uploaded files
@@ -195,7 +210,9 @@ router.post(
       let recipientsPayload: RecipientPayload[] = [];
 
       if (uploadReq.body.recipients) {
-        const parsed = JSON.parse(uploadReq.body.recipients as string) as RecipientPayload[];
+        const parsed = JSON.parse(
+          uploadReq.body.recipients as string,
+        ) as RecipientPayload[];
         recipientsPayload = parsed;
       } else if (
         uploadReq.body.recipientEmail &&
@@ -209,11 +226,17 @@ router.post(
             otp: uploadReq.body.otp,
             otpHash: uploadReq.body.otpHash,
             wrappedKey: Buffer.from(wrappedKeyBuffer).toString("base64"),
-            wrappedKeySalt: Buffer.from(wrappedKeySaltBuffer).toString("base64"),
+            wrappedKeySalt:
+              Buffer.from(wrappedKeySaltBuffer).toString("base64"),
           },
         ];
       } else {
-        return sendError(res, 400, "Validation Error", "At least one recipient is required");
+        return sendError(
+          res,
+          400,
+          "Validation Error",
+          "At least one recipient is required",
+        );
       }
 
       // Backend domain whitelist enforcement
@@ -221,16 +244,40 @@ router.post(
         (r) => !RADIX_EMAIL_REGEX.test(r.email),
       );
       if (invalidDomainRecipients.length > 0) {
-        return sendError(res, 400, "Invalid email domain", "Only @radixweb.com emails are allowed", {
-          invalidEmails: invalidDomainRecipients.map((r) => r.email),
-        });
+        return sendError(
+          res,
+          400,
+          "Invalid email domain",
+          "Only @radixweb.com emails are allowed",
+          {
+            invalidEmails: invalidDomainRecipients.map((r) => r.email),
+          },
+        );
+      }
+
+      // Reject self-send (sender cannot be in recipient list)
+      const senderEmail = (uploadReq as Request & { user?: { email: string } })
+        .user?.email;
+      if (senderEmail) {
+        const selfSend = recipientsPayload.some(
+          (r) => r.email.toLowerCase() === senderEmail.toLowerCase(),
+        );
+        if (selfSend) {
+          return sendError(
+            res,
+            400,
+            "Invalid recipients",
+            "You cannot send a file to yourself.",
+          );
+        }
       }
 
       // Use first recipient's email for legacy files.recipient_email (NOT NULL)
       const primaryRecipientEmail = recipientsPayload[0]!.email;
 
       // Create database record (Phase 6: uploaded_by_user_id from auth)
-      const userId = (uploadReq as Request & { user?: { id: string } }).user?.id ?? null;
+      const userId =
+        (uploadReq as Request & { user?: { id: string } }).user?.id ?? null;
       const recordId = await createFileRecord({
         fileId,
         fileName,
@@ -247,7 +294,8 @@ router.post(
       console.log("[UPLOAD] DB record created:", recordId);
 
       // Create per-recipient records
-      const recipientIds: Array<{ id: string; email: string; otp: string }> = [];
+      const recipientIds: Array<{ id: string; email: string; otp: string }> =
+        [];
       for (const recipient of recipientsPayload) {
         const recipientId = await createRecipientRecord({
           fileId,
@@ -256,21 +304,32 @@ router.post(
           wrappedKey: recipient.wrappedKey,
           wrappedKeySalt: recipient.wrappedKeySalt,
         });
-        recipientIds.push({ id: recipientId, email: recipient.email, otp: recipient.otp });
+        recipientIds.push({
+          id: recipientId,
+          email: recipient.email,
+          otp: recipient.otp,
+        });
       }
 
       // Generate download URL (frontend page where recipient enters OTP)
-      const downloadUrl = `${server.downloadPageBaseUrl}?fileId=${fileId}`;
+      const base = server.downloadPageBaseUrl.replace(/\/$/, "");
+      const downloadUrl = `${base}/receive-file?fileId=${fileId}`;
 
       // Log successful upload
-      await logAuditEvent(fileId, "upload", uploadReq.ip || "unknown", uploadReq.get("User-Agent") || "unknown", {
-        fileName,
-        fileSize: fileResult.size,
-        recipientCount: recipientsPayload.length,
-        expiryMinutes,
-        expiryType,
-        processingTimeMs: Date.now() - startTime,
-      });
+      await logAuditEvent(
+        fileId,
+        "upload",
+        uploadReq.ip || "unknown",
+        uploadReq.get("User-Agent") || "unknown",
+        {
+          fileName,
+          fileSize: fileResult.size,
+          recipientCount: recipientsPayload.length,
+          expiryMinutes,
+          expiryType,
+          processingTimeMs: Date.now() - startTime,
+        },
+      );
 
       // Prepare base fileBody for emails
       const fileBody = {
@@ -336,7 +395,9 @@ router.post(
         message:
           "File uploaded successfully. Download link and OTP sent to recipient.",
         uploadedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString(),
+        expiresAt: new Date(
+          Date.now() + expiryMinutes * 60 * 1000,
+        ).toISOString(),
       };
 
       res.status(200).json(response);
