@@ -1,7 +1,6 @@
 import { toast as sonner } from "sonner";
 import { env } from "../config/env";
-
-export type MessageType = "info" | "success" | "error";
+import type { MessageType } from "../types";
 
 /**
  * Show a toast message. Use this instead of the legacy Alert/useMessage.

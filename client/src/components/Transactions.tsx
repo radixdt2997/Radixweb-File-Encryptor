@@ -9,13 +9,14 @@ import { api } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { Card } from "./ui/Card";
 import { Button } from "./ui/Button";
+import { FileStatus, TransactionRole } from "../types";
 import { formatDate } from "../utils/file";
 
-function formatStatus(status: string): string {
-  if (status === "active") return "Active";
-  if (status === "expired") return "Expired";
-  if (status === "used") return "Used";
-  return status;
+function formatStatus(status: FileStatus | string): string {
+  if (status === FileStatus.Active) return "Active";
+  if (status === FileStatus.Expired) return "Expired";
+  if (status === FileStatus.Used) return "Used";
+  return String(status);
 }
 
 export function Transactions() {
@@ -147,12 +148,14 @@ export function Transactions() {
                         {" · "}
                         <span
                           className={
-                            item.role === "sender"
+                            item.role === TransactionRole.Sender
                               ? "text-cyan-400"
                               : "text-green-400"
                           }
                         >
-                          {item.role === "sender" ? "Sent" : "Received"}
+                          {item.role === TransactionRole.Sender
+                            ? "Sent"
+                            : "Received"}
                         </span>
                         {" · "}
                         {item.recipientCount} recipient
@@ -160,7 +163,7 @@ export function Transactions() {
                         {" · "}
                         <span
                           className={
-                            item.status === "active"
+                            item.status === FileStatus.Active
                               ? "text-green-400"
                               : "text-amber-400"
                           }
@@ -169,12 +172,12 @@ export function Transactions() {
                         </span>
                       </p>
                     </div>
-                    {item.status === "expired" ? (
+                    {item.status === FileStatus.Expired ? (
                       <span className="text-sm text-gray-500">Expired</span>
                     ) : (
                       <Link
                         to={
-                          item.role === "sender"
+                          item.role === TransactionRole.Sender
                             ? `/send-file?fileId=${item.fileId}`
                             : `/receive-file?fileId=${item.fileId}`
                         }

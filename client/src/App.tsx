@@ -134,8 +134,8 @@ function Layout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
-      <header className="border-b border-gray-700 backdrop-blur-md bg-slate-900/50 sticky top-0 z-40">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
+      <header className="border-b border-gray-700 backdrop-blur-md bg-slate-900/50 sticky top-0 z-40 shrink-0">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -187,7 +187,7 @@ function Layout() {
         }}
       />
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
         <nav className="flex flex-wrap gap-2 mb-8 p-1 bg-gray-800/50 rounded-lg border border-gray-700 justify-evenly">
           {navItems.map((item) => (
             <NavLink
@@ -214,7 +214,7 @@ function Layout() {
         </div>
       </main>
 
-      <footer className="border-t border-gray-700 bg-slate-900/50 mt-16 py-6">
+      <footer className="shrink-0 border-t border-gray-700 bg-slate-900/50 mt-auto py-6">
         <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
           <p>
             🔐 All encryption happens client-side. Your files are never stored

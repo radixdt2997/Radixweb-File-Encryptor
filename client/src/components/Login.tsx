@@ -28,7 +28,7 @@ export function Login({ onMessage }: LoginProps) {
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: React.SubmitEvent) => {
       e.preventDefault();
       if (!email.trim() || !password) {
         onMessage("Enter email and password", "error");

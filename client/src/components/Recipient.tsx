@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { env } from "../config/env";
-import type { FileMetadata } from "../types";
+import type { FileMetadata, MessageType } from "../types";
+import { useAuthStore } from "../stores/authStore";
 import { crypto } from "../utils/crypto";
 import {
   downloadFile,
@@ -20,18 +21,24 @@ const RECIPIENT_EMAIL_REGEX = new RegExp(
 
 interface RecipientProps {
   fileId: string | null;
-  onMessage: (text: string, type: "info" | "success" | "error") => void;
+  onMessage: (text: string, type: MessageType) => void;
   onReset: () => void;
 }
 
 export const Recipient = ({ fileId, onMessage, onReset }: RecipientProps) => {
   const navigate = useNavigate();
+  const userEmail = useAuthStore((s) => s.user?.email);
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [otp, setOtp] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   const loadedFileIdRef = useRef<string | null>(null);
+
+  // Pre-fill email when logged in
+  useEffect(() => {
+    if (userEmail) setRecipientEmail(userEmail.trim().toLowerCase());
+  }, [userEmail]);
 
   /* ────────────────────────────
      Load file metadata (once)
@@ -200,6 +207,7 @@ export const Recipient = ({ fileId, onMessage, onReset }: RecipientProps) => {
             error={emailError}
             placeholder={`name@${env.email.allowedDomain}`}
             fullWidth
+            disabled={!!userEmail}
           />
 
           <Input

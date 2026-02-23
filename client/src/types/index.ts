@@ -1,3 +1,26 @@
+/** Transaction list item role */
+export const TransactionRole = {
+  Sender: "sender",
+  Recipient: "recipient",
+} as const;
+export type TransactionRole =
+  (typeof TransactionRole)[keyof typeof TransactionRole];
+
+/** File status (transactions, API) */
+export const FileStatus = {
+  Active: "active",
+  Used: "used",
+  Expired: "expired",
+} as const;
+export type FileStatus = (typeof FileStatus)[keyof typeof FileStatus];
+
+/** File expiry type */
+export const ExpiryType = {
+  OneTime: "one-time",
+  TimeBased: "time-based",
+} as const;
+export type ExpiryType = (typeof ExpiryType)[keyof typeof ExpiryType];
+
 export interface FileMetadata {
   fileName: string;
   fileSize: number;
@@ -46,9 +69,9 @@ export interface TransactionItem {
   fileName: string;
   uploadedAt: string;
   expiryTime: string;
-  status: string;
+  status: FileStatus;
   recipientCount: number;
-  role: "sender" | "recipient";
+  role: TransactionRole;
 }
 
 export interface TransactionsResponse {

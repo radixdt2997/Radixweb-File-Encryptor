@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import type { RecipientInfo, SenderState } from "../types";
+import type { MessageType, RecipientInfo, SenderState } from "../types";
+import { ExpiryType } from "../types";
 import { api } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { crypto } from "../utils/crypto";
@@ -15,7 +16,7 @@ const RADIX_EMAIL_REGEX = new RegExp(
 );
 
 interface SenderProps {
-  onMessage: (text: string, type: "info" | "success" | "error") => void;
+  onMessage: (text: string, type: MessageType) => void;
   initialFileId?: string | null;
 }
 
@@ -36,8 +37,8 @@ export const Sender = ({ onMessage, initialFileId }: SenderProps) => {
   const [expiryMinutes, setExpiryMinutes] = useState(
     env.ui.defaultExpiryMinutes,
   );
-  const [expiryType, setExpiryType] = useState<"one-time" | "time-based">(
-    "time-based",
+  const [expiryType, setExpiryType] = useState<ExpiryType>(
+    ExpiryType.TimeBased,
   );
   const autoLoadedForFileId = useRef<string | null>(null);
 
@@ -134,7 +135,10 @@ export const Sender = ({ onMessage, initialFileId }: SenderProps) => {
       ? valid.filter((e) => e.toLowerCase() !== userEmail.toLowerCase())
       : valid;
     if (recipientOnly.length === 0) {
-      onMessage("You cannot send a file to yourself. Add at least one other recipient.", "error");
+      onMessage(
+        "You cannot send a file to yourself. Add at least one other recipient.",
+        "error",
+      );
       return;
     }
 
@@ -366,13 +370,11 @@ export const Sender = ({ onMessage, initialFileId }: SenderProps) => {
                 </label>
                 <select
                   value={expiryType}
-                  onChange={(e) =>
-                    setExpiryType(e.target.value as "one-time" | "time-based")
-                  }
+                  onChange={(e) => setExpiryType(e.target.value as ExpiryType)}
                   className="w-full px-3 py-2 rounded bg-gray-600 text-white text-sm border border-gray-500"
                 >
-                  <option value="time-based">Time-based</option>
-                  <option value="one-time">One-time Download</option>
+                  <option value={ExpiryType.TimeBased}>Time-based</option>
+                  <option value={ExpiryType.OneTime}>One-time Download</option>
                 </select>
               </div>
               <div>
