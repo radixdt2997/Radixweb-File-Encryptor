@@ -273,7 +273,16 @@ router.post(
       }
 
       // Use first recipient's email for legacy files.recipient_email (NOT NULL)
-      const primaryRecipientEmail = recipientsPayload[0]!.email;
+      const firstRecipient = recipientsPayload[0];
+      if (!firstRecipient) {
+        return sendError(
+          res,
+          400,
+          "Invalid recipients",
+          "At least one recipient is required",
+        );
+      }
+      const primaryRecipientEmail = firstRecipient.email;
 
       // Create database record (Phase 6: uploaded_by_user_id from auth)
       const userId =
@@ -286,7 +295,7 @@ router.post(
         recipientEmail: primaryRecipientEmail,
         wrappedKey: wrappedKeyBuffer,
         wrappedKeySalt: wrappedKeySaltBuffer,
-        otpHash: recipientsPayload[0]!.otpHash,
+        otpHash: firstRecipient.otpHash,
         expiryMinutes,
         expiryType,
         uploadedByUserId: userId,
@@ -344,7 +353,12 @@ router.post(
       });
 
       // Send emails asynchronously (don't block response)
+      const resolvedFileId = fileId;
       setImmediate(async () => {
+        if (resolvedFileId === null) {
+          console.error("fileId missing in email callback");
+          return;
+        }
         try {
           // Send per-recipient emails
           for (const recipient of recipientIds) {
@@ -359,25 +373,40 @@ router.post(
             // Send OTP email (separate channel for security)
             await sendOTPEmail(recipient.email, recipientFileBody);
 
-            // Per-recipient audit logging
-            await logRecipientAuditEvent(
-              fileId!,
-              recipient.id,
-              "otp_sent",
-              uploadReq.ip || "unknown",
-              uploadReq.get("User-Agent") || "unknown",
-              {
-                email: recipient.email,
-              },
-            );
+            // Per-recipient audit logging (skip if recipient row missing, e.g. FK race)
+            try {
+              await logRecipientAuditEvent(
+                resolvedFileId,
+                recipient.id,
+                "otp_sent",
+                uploadReq.ip || "unknown",
+                uploadReq.get("User-Agent") || "unknown",
+                {
+                  email: recipient.email,
+                },
+              );
+            } catch (auditErr: unknown) {
+              const code = (auditErr as { code?: string })?.code;
+              if (code === "23503") {
+                await logAuditEvent(
+                  resolvedFileId,
+                  "recipient_audit_skipped",
+                  uploadReq.ip || "unknown",
+                  uploadReq.get("User-Agent") || "unknown",
+                  { recipientId: recipient.id, email: recipient.email },
+                ).catch(() => {});
+              } else {
+                throw auditErr;
+              }
+            }
           }
 
-          console.log(`📧 Emails sent for file ${fileId}`);
+          console.log(`📧 Emails sent for file ${resolvedFileId}`);
         } catch (emailError) {
           console.error("Failed to send emails:", emailError);
           // Log email failure but don't affect upload success
           await logAuditEvent(
-            fileId!,
+            resolvedFileId,
             "email_failed",
             uploadReq.ip || "unknown",
             uploadReq.get("User-Agent") || "unknown",

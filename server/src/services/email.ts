@@ -92,13 +92,6 @@ export async function initEmailService(): Promise<boolean> {
   }
 }
 
-/**
- * Check if email service is configured
- */
-function isEmailConfigured(): boolean {
-  return transporter !== null;
-}
-
 // ============================================================================
 // EMAIL TEMPLATES
 // ============================================================================
@@ -110,7 +103,7 @@ export async function sendDownloadLinkEmail(
   recipientEmail: string,
   data: DownloadLinkEmailData,
 ): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
+  if (!transporter) {
     throw new Error("Email service not initialized");
   }
 
@@ -191,7 +184,7 @@ All encryption happens in your browser. Zero-knowledge security.
   };
 
   try {
-    const result = await transporter!.sendMail(mailOptions);
+    const result = await transporter.sendMail(mailOptions);
     console.log(
       `📧 Download link email sent to ${recipientEmail}: ${result.messageId}`,
     );
@@ -211,7 +204,7 @@ export async function sendOTPEmail(
   recipientEmail: string,
   data: OTPEmailData,
 ): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
+  if (!transporter) {
     throw new Error("Email service not initialized");
   }
 
@@ -301,7 +294,7 @@ If you did not expect this email, please ignore it.
   };
 
   try {
-    const result = await transporter!.sendMail(mailOptions);
+    const result = await transporter.sendMail(mailOptions);
     console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
     return {
       messageId: result.messageId,
@@ -322,7 +315,7 @@ If you did not expect this email, please ignore it.
 export async function sendTestEmail(
   recipientEmail: string,
 ): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
+  if (!transporter) {
     throw new Error("Email service not initialized");
   }
 
@@ -335,7 +328,7 @@ export async function sendTestEmail(
   };
 
   try {
-    const result = await transporter!.sendMail(mailOptions);
+    const result = await transporter.sendMail(mailOptions);
     console.log(`🧪 Test email sent to ${recipientEmail}: ${result.messageId}`);
     return {
       messageId: result.messageId,
