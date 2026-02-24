@@ -7,17 +7,17 @@
 
 import dotenv from 'dotenv';
 import type {
-  ConfigSummary,
-  AuthConfig,
-  DatabaseConfig,
-  EmailConfig,
-  EmailMockConfig,
-  EncryptionConfig,
-  LoggingConfig,
-  SecurityConfig,
-  ServerConfig,
-  StorageConfig,
-} from "./types/config";
+    ConfigSummary,
+    AuthConfig,
+    DatabaseConfig,
+    EmailConfig,
+    EmailMockConfig,
+    EncryptionConfig,
+    LoggingConfig,
+    SecurityConfig,
+    ServerConfig,
+    StorageConfig,
+} from './types/config';
 
 dotenv.config();
 
@@ -47,7 +47,7 @@ export const server: ServerConfig = {
 // ============================================================================
 
 export const database: DatabaseConfig = {
-  databaseUrl: process.env.DATABASE_URL || "",
+    databaseUrl: process.env.DATABASE_URL || '',
 };
 
 // ============================================================================
@@ -136,10 +136,10 @@ export const security: SecurityConfig = {
 // ============================================================================
 
 export const auth: AuthConfig = {
-  jwtSecret: process.env.JWT_SECRET || "",
-  jwtExpiresInSeconds: parseInt(process.env.JWT_EXPIRES_IN_SECONDS || "3600", 10), // 1 hour default
-  allowedEmailDomain: process.env.ALLOWED_EMAIL_DOMAIN || "radixweb.com",
-  allowSelfRegistration: process.env.ALLOW_SELF_REGISTRATION !== "false",
+    jwtSecret: process.env.JWT_SECRET || '',
+    jwtExpiresInSeconds: parseInt(process.env.JWT_EXPIRES_IN_SECONDS || '3600', 10), // 1 hour default
+    allowedEmailDomain: process.env.ALLOWED_EMAIL_DOMAIN || 'radixweb.com',
+    allowSelfRegistration: process.env.ALLOW_SELF_REGISTRATION !== 'false',
 };
 
 // ============================================================================
@@ -178,46 +178,46 @@ function isEmailConfigured(): boolean {
  * Get configuration summary for logging
  */
 export function getConfigSummary(): ConfigSummary {
-  return {
-    server: {
-      environment: server.nodeEnv,
-      port: server.port,
-      host: server.host,
-      downloadPageBaseUrl: server.downloadPageBaseUrl,
-      docsEnabled: server.docsEnabled,
-    },
-    database: {
-      databaseUrl: database.databaseUrl ? "[SET]" : "[MISSING]",
-    },
-    storage: {
-      path: storage.path,
-      maxFileSizeMB: (storage.maxFileSize / (1024 * 1024)).toFixed(2),
-      retentionDays: storage.retentionDays,
-    },
-    email: {
-      configured: isEmailConfigured(),
-      service: email.service,
-      from: email.from,
-    },
-    security: {
-      corsOrigin: security.corsOrigin,
-      rateLimitMaxRequests: security.rateLimitMaxRequests,
-      otpMaxAttempts: security.otpMaxAttempts,
-    },
-    auth: {
-      jwtSecret: !!auth.jwtSecret,
-      allowedEmailDomain: auth.allowedEmailDomain,
-      allowSelfRegistration: auth.allowSelfRegistration,
-    },
-    logging: {
-      level: logging.level,
-      auditEnabled: logging.auditEnabled,
-    },
-    encryption: {
-      enabled: encryption.enabled,
-      keyConfigured: encryption.masterKey !== null,
-    },
-  };
+    return {
+        server: {
+            environment: server.nodeEnv,
+            port: server.port,
+            host: server.host,
+            downloadPageBaseUrl: server.downloadPageBaseUrl,
+            docsEnabled: server.docsEnabled,
+        },
+        database: {
+            databaseUrl: database.databaseUrl ? '[SET]' : '[MISSING]',
+        },
+        storage: {
+            path: storage.path,
+            maxFileSizeMB: (storage.maxFileSize / (1024 * 1024)).toFixed(2),
+            retentionDays: storage.retentionDays,
+        },
+        email: {
+            configured: isEmailConfigured(),
+            service: email.service,
+            from: email.from,
+        },
+        security: {
+            corsOrigin: security.corsOrigin,
+            rateLimitMaxRequests: security.rateLimitMaxRequests,
+            otpMaxAttempts: security.otpMaxAttempts,
+        },
+        auth: {
+            jwtSecret: !!auth.jwtSecret,
+            allowedEmailDomain: auth.allowedEmailDomain,
+            allowSelfRegistration: auth.allowSelfRegistration,
+        },
+        logging: {
+            level: logging.level,
+            auditEnabled: logging.auditEnabled,
+        },
+        encryption: {
+            enabled: encryption.enabled,
+            keyConfigured: encryption.masterKey !== null,
+        },
+    };
 }
 
 // ============================================================================
@@ -230,10 +230,10 @@ export function getConfigSummary(): ConfigSummary {
 export function validateConfiguration(): boolean {
     const errors: string[] = [];
 
-  // Phase 6: PostgreSQL required
-  if (!database.databaseUrl || database.databaseUrl.trim() === "") {
-    errors.push("DATABASE_URL is required (PostgreSQL connection string)");
-  }
+    // Phase 6: PostgreSQL required
+    if (!database.databaseUrl || database.databaseUrl.trim() === '') {
+        errors.push('DATABASE_URL is required (PostgreSQL connection string)');
+    }
 
     if (!storage.path) {
         errors.push('Storage path is required');
@@ -253,14 +253,14 @@ export function validateConfiguration(): boolean {
         );
     }
 
-  // Auth: require JWT secret
-  if (!auth.jwtSecret || auth.jwtSecret.trim() === "") {
-    errors.push("JWT_SECRET is required for authentication");
-  }
+    // Auth: require JWT secret
+    if (!auth.jwtSecret || auth.jwtSecret.trim() === '') {
+        errors.push('JWT_SECRET is required for authentication');
+    }
 
-  if (errors.length > 0) {
-    throw new Error(`Configuration validation failed: ${errors.join(", ")}`);
-  }
+    if (errors.length > 0) {
+        throw new Error(`Configuration validation failed: ${errors.join(', ')}`);
+    }
 
     return true;
 }

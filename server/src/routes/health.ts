@@ -5,19 +5,13 @@
  * Used for monitoring and load balancer health checks.
  */
 
-import express from "express";
-import type { Request, Response } from "express";
-import { server } from "../config";
-import { sendError } from "../lib/errorResponse";
-import {
-  healthCheck as dbHealthCheck,
-  getDatabaseStats,
-} from "../services/database";
-import {
-  getStorageStats,
-  healthCheck as storageHealthCheck,
-} from "../services/file-storage";
-import { HealthStatus, type HealthResponse } from "../types/api";
+import express from 'express';
+import type { Request, Response } from 'express';
+import { server } from '../config';
+import { sendError } from '../lib/errorResponse';
+import { healthCheck as dbHealthCheck, getDatabaseStats } from '../services/database';
+import { getStorageStats, healthCheck as storageHealthCheck } from '../services/file-storage';
+import { HealthStatus, type HealthResponse } from '../types/api';
 
 const router: express.Router = express.Router();
 
@@ -35,18 +29,17 @@ router.get('/', async (_req: Request, res: Response<HealthResponse>) => {
         // Check storage health
         const storageHealth = await storageHealthCheck();
 
-    // Get system stats
-    const dbStats =
-      dbHealth.status === HealthStatus.Healthy ? await getDatabaseStats() : null;
-    const storageStats =
-      storageHealth.status === HealthStatus.Healthy ? await getStorageStats() : null;
+        // Get system stats
+        const dbStats = dbHealth.status === HealthStatus.Healthy ? await getDatabaseStats() : null;
+        const storageStats =
+            storageHealth.status === HealthStatus.Healthy ? await getStorageStats() : null;
 
-    // Determine overall health
-    const overallHealth =
-      dbHealth.status === HealthStatus.Healthy &&
-      storageHealth.status === HealthStatus.Healthy
-        ? HealthStatus.Healthy
-        : HealthStatus.Unhealthy;
+        // Determine overall health
+        const overallHealth =
+            dbHealth.status === HealthStatus.Healthy &&
+            storageHealth.status === HealthStatus.Healthy
+                ? HealthStatus.Healthy
+                : HealthStatus.Unhealthy;
 
         // Response data
         const healthData: HealthResponse = {
@@ -66,8 +59,8 @@ router.get('/', async (_req: Request, res: Response<HealthResponse>) => {
             responseTime: Date.now() - startTime,
         };
 
-    // Return appropriate status code
-    const statusCode = overallHealth === HealthStatus.Healthy ? 200 : 503;
+        // Return appropriate status code
+        const statusCode = overallHealth === HealthStatus.Healthy ? 200 : 503;
 
         res.status(statusCode).json(healthData);
     } catch (error) {

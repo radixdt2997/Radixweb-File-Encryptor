@@ -30,26 +30,24 @@ const metadataValidation = [
 // ============================================================================
 
 router.get(
-  "/:fileId",
-  metadataValidation,
-  async (
-    req: Request<{ fileId: string }>,
-    res: Response<
-      MetadataResponse | { error: string; message: string; details?: unknown }
-    >,
-  ) => {
-    try {
-      // Check validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return sendError(
-          res,
-          400,
-          "Validation Error",
-          "Invalid file ID format",
-          errors.array(),
-        );
-      }
+    '/:fileId',
+    metadataValidation,
+    async (
+        req: Request<{ fileId: string }>,
+        res: Response<MetadataResponse | { error: string; message: string; details?: unknown }>,
+    ) => {
+        try {
+            // Check validation errors
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return sendError(
+                    res,
+                    400,
+                    'Validation Error',
+                    'Invalid file ID format',
+                    errors.array(),
+                );
+            }
 
             const { fileId } = req.params;
             const clientIP = req.ip || 'unknown';
@@ -62,13 +60,8 @@ router.get(
                     found: false,
                 });
 
-        return sendError(
-          res,
-          404,
-          "File Not Found",
-          "The requested file does not exist",
-        );
-      }
+                return sendError(res, 404, 'File Not Found', 'The requested file does not exist');
+            }
 
             // Check if file is expired
             if (await isFileExpired(fileId)) {
@@ -78,13 +71,13 @@ router.get(
                     expiryTime: file.expiry_time,
                 });
 
-        return sendError(
-          res,
-          404,
-          "File Expired",
-          "Request no longer exists please ask sender to send again.",
-        );
-      }
+                return sendError(
+                    res,
+                    404,
+                    'File Expired',
+                    'Request no longer exists please ask sender to send again.',
+                );
+            }
 
             // Log metadata access (for analytics)
             await logAuditEvent(fileId, 'otp_requested', clientIP, userAgent, {

@@ -1,13 +1,13 @@
-import { useState } from "react";
-import type { MessageType } from "../types";
-import { crypto } from "../utils/crypto";
-import { downloadFile } from "../utils/file";
-import { Button } from "./ui/Button";
-import { Card } from "./ui/Card";
-import { Input } from "./ui/Input";
+import { useState } from 'react';
+import type { MessageType } from '../types';
+import { crypto } from '../utils/crypto';
+import { downloadFile } from '../utils/file';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Input } from './ui/Input';
 
 interface LegacyProps {
-  onMessage: (text: string, type: MessageType) => void;
+    onMessage: (text: string, type: MessageType) => void;
 }
 
 export const Legacy = ({ onMessage }: LegacyProps) => {

@@ -6,66 +6,66 @@
 
 /** Role in a transaction (for "My transactions" list) */
 export enum TransactionRole {
-  Sender = "sender",
-  Recipient = "recipient",
+    Sender = 'sender',
+    Recipient = 'recipient',
 }
 
 /** User role (auth) */
 export enum UserRole {
-  Admin = "admin",
-  User = "user",
+    Admin = 'admin',
+    User = 'user',
 }
 
 /** File expiry type */
 export enum ExpiryType {
-  OneTime = "one-time",
-  TimeBased = "time-based",
+    OneTime = 'one-time',
+    TimeBased = 'time-based',
 }
 
 /** File status */
 export enum FileStatus {
-  Active = "active",
-  Used = "used",
-  Expired = "expired",
+    Active = 'active',
+    Used = 'used',
+    Expired = 'expired',
 }
 
 /**
  * User record (Phase 6 auth)
  */
 export interface UserRecord {
-  id: string;
-  email: string;
-  password_hash: string;
-  role: UserRole;
-  created_at: string;
-  updated_at: string;
+    id: string;
+    email: string;
+    password_hash: string;
+    role: UserRole;
+    created_at: string;
+    updated_at: string;
 }
 
 /**
  * File record structure (PostgreSQL schema; uploaded_by_user_id for Phase 6)
  */
 export interface FileRecord {
-  id?: number;
-  file_id: string;
-  file_name: string;
-  file_path: string;
-  file_size: number;
-  recipient_email: string;
-  wrapped_key: Buffer | string;
-  wrapped_key_salt: Buffer | string;
-  otp_hash: string;
-  expiry_type: ExpiryType;
-  expiry_time: string;
-  status: FileStatus;
-  otp_attempts: number;
-  last_attempt_at: string | null;
-  created_at: string;
-  downloaded_at: string | null;
-  total_recipients?: number;
-  verified_recipients?: number;
-  downloaded_recipients?: number;
-  /** Phase 6: user who uploaded the file (null for legacy/migrated rows) */
-  uploaded_by_user_id?: string | null;
+    id?: number;
+    file_id: string;
+    file_name: string;
+    file_path: string;
+    file_size: number;
+    recipient_email: string;
+    wrapped_key: Buffer | string;
+    wrapped_key_salt: Buffer | string;
+    otp_hash: string;
+    expiry_type: ExpiryType;
+    expiry_time: string;
+    status: FileStatus;
+    otp_attempts: number;
+    last_attempt_at: string | null;
+    created_at: string;
+    downloaded_at: string | null;
+    total_recipients?: number;
+    verified_recipients?: number;
+    downloaded_recipients?: number;
+    /** Phase 6: user who uploaded the file (null for legacy/migrated rows) */
+    uploaded_by_user_id?: string | null;
 }
 
 /**
@@ -116,18 +116,18 @@ export interface RecipientAuditLogRecord {
  * Input data for creating a file record
  */
 export interface CreateFileData {
-  fileId: string;
-  fileName: string;
-  filePath: string;
-  fileSize: number;
-  recipientEmail: string;
-  wrappedKey: Buffer;
-  wrappedKeySalt: Buffer;
-  otpHash: string;
-  expiryMinutes: number;
-  expiryType: ExpiryType;
-  /** Phase 6: user who uploaded (required when auth is enabled) */
-  uploadedByUserId?: string | null;
+    fileId: string;
+    fileName: string;
+    filePath: string;
+    fileSize: number;
+    recipientEmail: string;
+    wrappedKey: Buffer;
+    wrappedKeySalt: Buffer;
+    otpHash: string;
+    expiryMinutes: number;
+    expiryType: ExpiryType;
+    /** Phase 6: user who uploaded (required when auth is enabled) */
+    uploadedByUserId?: string | null;
 }
 
 /**

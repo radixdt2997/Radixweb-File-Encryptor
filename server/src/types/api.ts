@@ -4,12 +4,8 @@
  * Type definitions for all API endpoints in the Secure File Server.
  */
 
-import type {
-  DatabaseHealthCheck,
-  ExpiryType,
-  TransactionRole,
-} from "./database";
-import { StorageHealthCheck } from "./services";
+import type { DatabaseHealthCheck, ExpiryType, TransactionRole } from './database';
+import { StorageHealthCheck } from './services';
 
 /**
  * Standard API error response from the server.
@@ -39,13 +35,13 @@ export interface RecipientPayload {
  * Request body for POST /api/upload
  */
 export interface UploadRequest {
-  fileName: string;
-  expiryMinutes: number;
-  expiryType: ExpiryType;
-  recipientEmail?: string; // Legacy single-recipient field
-  otpHash?: string; // Legacy field
-  otp?: string; // Legacy field
-  recipients?: string; // JSON string of RecipientPayload[]
+    fileName: string;
+    expiryMinutes: number;
+    expiryType: ExpiryType;
+    recipientEmail?: string; // Legacy single-recipient field
+    otpHash?: string; // Legacy field
+    otp?: string; // Legacy field
+    recipients?: string; // JSON string of RecipientPayload[]
 }
 
 /**
@@ -94,20 +90,20 @@ export interface MetadataResponse {
  * Response for GET /api/transactions (Phase 6)
  */
 export interface TransactionsResponse {
-  items: TransactionItem[];
-  total: number;
-  page: number;
-  limit: number;
+    items: TransactionItem[];
+    total: number;
+    page: number;
+    limit: number;
 }
 
 export interface TransactionItem {
-  fileId: string;
-  fileName: string;
-  uploadedAt: string;
-  expiryTime: string;
-  status: string;
-  recipientCount: number;
-  role: TransactionRole;
+    fileId: string;
+    fileName: string;
+    uploadedAt: string;
+    expiryTime: string;
+    status: string;
+    recipientCount: number;
+    role: TransactionRole;
 }
 
 /**
@@ -147,28 +143,28 @@ export interface TestEmailResponse {
 }
 
 export enum HealthStatus {
-  Healthy = "healthy",
-  Unhealthy = "unhealthy",
+    Healthy = 'healthy',
+    Unhealthy = 'unhealthy',
 }
 
 /**
  * Response for GET /api/health
  */
 export interface HealthResponse {
-  status: HealthStatus;
-  timestamp: string;
-  uptime: number;
-  version: string;
-  environment: string;
-  services: {
-    database: DatabaseHealthCheck;
-    storage: StorageHealthCheck;
-  };
-  stats: {
-    database: DatabaseStats | null;
-    storage: StorageStats | null;
-  };
-  responseTime: number;
+    status: HealthStatus;
+    timestamp: string;
+    uptime: number;
+    version: string;
+    environment: string;
+    services: {
+        database: DatabaseHealthCheck;
+        storage: StorageHealthCheck;
+    };
+    stats: {
+        database: DatabaseStats | null;
+        storage: StorageStats | null;
+    };
+    responseTime: number;
 }
 
 /**

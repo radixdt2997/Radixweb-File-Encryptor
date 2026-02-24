@@ -20,45 +20,38 @@ const router: express.Router = express.Router();
 // ============================================================================
 
 router.post(
-  "/",
-  [
-    body("email")
-      .isEmail()
-      .normalizeEmail()
-      .withMessage("Valid email address is required"),
-  ],
-  async (
-    req: Request<
-      {},
-      TestEmailResponse | { error: string; message: string; details?: unknown },
-      TestEmailRequest
-    >,
-    res: Response<
-      TestEmailResponse | { error: string; message: string; details?: unknown }
-    >,
-  ) => {
-    // Only allow in development
-    if (server.nodeEnv === "production") {
-      return sendError(
-        res,
-        403,
-        "Forbidden",
-        "Test email endpoint not available in production",
-      );
-    }
+    '/',
+    [body('email').isEmail().normalizeEmail().withMessage('Valid email address is required')],
+    async (
+        req: Request<
+            {},
+            TestEmailResponse | { error: string; message: string; details?: unknown },
+            TestEmailRequest
+        >,
+        res: Response<TestEmailResponse | { error: string; message: string; details?: unknown }>,
+    ) => {
+        // Only allow in development
+        if (server.nodeEnv === 'production') {
+            return sendError(
+                res,
+                403,
+                'Forbidden',
+                'Test email endpoint not available in production',
+            );
+        }
 
-    try {
-      // Check validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return sendError(
-          res,
-          400,
-          "Validation Error",
-          "Invalid email address",
-          errors.array(),
-        );
-      }
+        try {
+            // Check validation errors
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return sendError(
+                    res,
+                    400,
+                    'Validation Error',
+                    'Invalid email address',
+                    errors.array(),
+                );
+            }
 
             const { email } = req.body;
 

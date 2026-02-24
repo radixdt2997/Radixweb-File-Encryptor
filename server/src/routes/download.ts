@@ -11,16 +11,16 @@ import { param, validationResult } from 'express-validator';
 import { server } from '../config';
 import { sendError } from '../lib/errorResponse';
 import {
-  getFileById,
-  isFileExpired,
-  logAuditEvent,
-  updateFileStatus,
-  getRecipientsByFileId,
-  updateRecipientRecord,
-  logRecipientAuditEvent,
-} from "../services/database";
-import { ExpiryType, FileStatus } from "../types/database";
-import { readFile } from "../services/file-storage";
+    getFileById,
+    isFileExpired,
+    logAuditEvent,
+    updateFileStatus,
+    getRecipientsByFileId,
+    updateRecipientRecord,
+    logRecipientAuditEvent,
+} from '../services/database';
+import { ExpiryType, FileStatus } from '../types/database';
+import { readFile } from '../services/file-storage';
 
 const router: express.Router = express.Router();
 
@@ -89,33 +89,38 @@ router.get(
                 );
             }
 
-      // Check if one-time file was already downloaded (treat as expired)
-      if (file.expiry_type === ExpiryType.OneTime && file.status !== FileStatus.Active) {
-        await logAuditEvent(fileId, "otp_failed", clientIP, userAgent, {
-          reason: "already_used",
-        });
+            // Check if one-time file was already downloaded (treat as expired)
+            if (file.expiry_type === ExpiryType.OneTime && file.status !== FileStatus.Active) {
+                await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
+                    reason: 'already_used',
+                });
 
-        return sendError(res, 400, "File Expired", "This file has already been downloaded and is no longer available");
-      }
+                return sendError(
+                    res,
+                    400,
+                    'File Expired',
+                    'This file has already been downloaded and is no longer available',
+                );
+            }
 
-      // Mark one-time as expired immediately so link is dead before we read/send (no race)
-      if (file.expiry_type === ExpiryType.OneTime) {
-        await updateFileStatus(fileId, FileStatus.Expired, {
-          downloadedAt: new Date().toISOString(),
-        });
-      }
+            // Mark one-time as expired immediately so link is dead before we read/send (no race)
+            if (file.expiry_type === ExpiryType.OneTime) {
+                await updateFileStatus(fileId, FileStatus.Expired, {
+                    downloadedAt: new Date().toISOString(),
+                });
+            }
 
             // Read the encrypted file from storage
             const fileBuffer = await readFile(file.file_path);
 
-      // Update all recipients' download timestamps (per-recipient audit)
-      const recipients = await getRecipientsByFileId(fileId);
-      const now = new Date().toISOString();
-      for (const recipient of recipients) {
-        if (!recipient.downloaded_at) {
-          await updateRecipientRecord(recipient.id, {
-            downloaded_at: now,
-          });
+            // Update all recipients' download timestamps (per-recipient audit)
+            const recipients = await getRecipientsByFileId(fileId);
+            const now = new Date().toISOString();
+            for (const recipient of recipients) {
+                if (!recipient.downloaded_at) {
+                    await updateRecipientRecord(recipient.id, {
+                        downloaded_at: now,
+                    });
 
                     await logRecipientAuditEvent(
                         fileId,
