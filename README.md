@@ -77,9 +77,9 @@ npm start
 1. Select file and add recipient emails
 2. File encrypted locally with random AES-256 key
 3. For each recipient:
-   - Generate unique 6-digit OTP
-   - Wrap file key with OTP-derived key
-   - Hash OTP (SHA-256) for storage
+    - Generate unique 6-digit OTP
+    - Wrap file key with OTP-derived key
+    - Hash OTP (SHA-256) for storage
 4. Upload encrypted file + all wrapped keys to server
 5. Recipients get download link + their OTP via separate emails
 
@@ -229,11 +229,11 @@ For detailed explanations of the cryptographic and security concepts used (AES-2
 
 - **Timing Attack Protection** - Constant-time OTP comparison using crypto.timingSafeEqual
 - **Rate Limiting** - Multi-tiered protection:
-  - General: 100 requests/15 min
-  - OTP verification: 3 attempts/5 sec
-  - File uploads: 20/15 min
-  - File access: 30/1 min
-  - Recipient operations: 5/15 min
+    - General: 100 requests/15 min
+    - OTP verification: 3 attempts/5 sec
+    - File uploads: 20/15 min
+    - File access: 30/1 min
+    - Recipient operations: 5/15 min
 - **Input Validation** - Express-validator on all endpoints
 - **CORS Protection** - Configurable allowed origins
 - **Security Headers** - Helmet.js for HTTP security headers

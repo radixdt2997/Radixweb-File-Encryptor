@@ -3,8 +3,8 @@
  * All error responses from the server use this structure so the frontend can parse them consistently.
  */
 
-import type { Response } from "express";
-import type { ApiErrorResponse } from "../types/api";
+import type { Response } from 'express';
+import type { ApiErrorResponse } from '../types/api';
 
 /**
  * Send a JSON error response with the standard structure.
@@ -17,15 +17,15 @@ import type { ApiErrorResponse } from "../types/api";
  * @returns Express response object
  */
 export function sendError(
-  res: Response,
-  status: number,
-  errorCode: string,
-  message: string,
-  details?: unknown,
+    res: Response,
+    status: number,
+    errorCode: string,
+    message: string,
+    details?: unknown,
 ): Response {
-  const body: ApiErrorResponse = { error: errorCode, message };
-  if (details !== undefined && details !== null) {
-    body.details = details;
-  }
-  return res.status(status).json(body);
+    const body: ApiErrorResponse = { error: errorCode, message };
+    if (details !== undefined && details !== null) {
+        body.details = details;
+    }
+    return res.status(status).json(body);
 }
