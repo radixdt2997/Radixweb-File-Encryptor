@@ -4,8 +4,45 @@
  * Type definitions for database models, queries, and operations.
  */
 
+/** Role in a transaction (for "My transactions" list) */
+export enum TransactionRole {
+    Sender = 'sender',
+    Recipient = 'recipient',
+}
+
+/** User role (auth) */
+export enum UserRole {
+    Admin = 'admin',
+    User = 'user',
+}
+
+/** File expiry type */
+export enum ExpiryType {
+    OneTime = 'one-time',
+    TimeBased = 'time-based',
+}
+
+/** File status */
+export enum FileStatus {
+    Active = 'active',
+    Used = 'used',
+    Expired = 'expired',
+}
+
 /**
- * File record structure (matches SQLite schema)
+ * User record (Phase 6 auth)
+ */
+export interface UserRecord {
+    id: string;
+    email: string;
+    password_hash: string;
+    role: UserRole;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * File record structure (PostgreSQL schema; uploaded_by_user_id for Phase 6)
  */
 export interface FileRecord {
     id?: number;
@@ -17,9 +54,9 @@ export interface FileRecord {
     wrapped_key: Buffer | string;
     wrapped_key_salt: Buffer | string;
     otp_hash: string;
-    expiry_type: 'one-time' | 'time-based';
+    expiry_type: ExpiryType;
     expiry_time: string;
-    status: 'active' | 'used' | 'expired';
+    status: FileStatus;
     otp_attempts: number;
     last_attempt_at: string | null;
     created_at: string;
@@ -27,10 +64,12 @@ export interface FileRecord {
     total_recipients?: number;
     verified_recipients?: number;
     downloaded_recipients?: number;
+    /** Phase 6: user who uploaded the file (null for legacy/migrated rows) */
+    uploaded_by_user_id?: string | null;
 }
 
 /**
- * Recipient record structure (matches SQLite schema)
+ * Recipient record structure (matches PostgreSQL schema)
  */
 export interface RecipientRecord {
     id: string;
@@ -86,7 +125,9 @@ export interface CreateFileData {
     wrappedKeySalt: Buffer;
     otpHash: string;
     expiryMinutes: number;
-    expiryType: 'one-time' | 'time-based';
+    expiryType: ExpiryType;
+    /** Phase 6: user who uploaded (required when auth is enabled) */
+    uploadedByUserId?: string | null;
 }
 
 /**

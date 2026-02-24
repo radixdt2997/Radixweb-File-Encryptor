@@ -4,5 +4,4 @@ packages:
 
 onlyBuiltDependencies:
   - '@scarf/scarf'
-  - better-sqlite3
   - esbuild

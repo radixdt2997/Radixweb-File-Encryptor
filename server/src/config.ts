@@ -8,6 +8,7 @@
 import dotenv from 'dotenv';
 import type {
     ConfigSummary,
+    AuthConfig,
     DatabaseConfig,
     EmailConfig,
     EmailMockConfig,
@@ -42,12 +43,11 @@ export const server: ServerConfig = {
 };
 
 // ============================================================================
-// DATABASE CONFIGURATION
+// DATABASE CONFIGURATION (PostgreSQL - Phase 6)
 // ============================================================================
 
 export const database: DatabaseConfig = {
-    path: process.env.DB_PATH || './data/secure-files.db',
-    useSqlite: process.env.USE_SQLITE === 'true' || process.env.NODE_ENV === 'production',
+    databaseUrl: process.env.DATABASE_URL || '',
 };
 
 // ============================================================================
@@ -132,6 +132,17 @@ export const security: SecurityConfig = {
 };
 
 // ============================================================================
+// AUTH CONFIGURATION (Phase 6)
+// ============================================================================
+
+export const auth: AuthConfig = {
+    jwtSecret: process.env.JWT_SECRET || '',
+    jwtExpiresInSeconds: parseInt(process.env.JWT_EXPIRES_IN_SECONDS || '3600', 10), // 1 hour default
+    allowedEmailDomain: process.env.ALLOWED_EMAIL_DOMAIN || 'radixweb.com',
+    allowSelfRegistration: process.env.ALLOW_SELF_REGISTRATION !== 'false',
+};
+
+// ============================================================================
 // EMAIL MOCK CONFIGURATION (Development)
 // ============================================================================
 
@@ -176,8 +187,7 @@ export function getConfigSummary(): ConfigSummary {
             docsEnabled: server.docsEnabled,
         },
         database: {
-            path: database.path,
-            useSqlite: database.useSqlite,
+            databaseUrl: database.databaseUrl ? '[SET]' : '[MISSING]',
         },
         storage: {
             path: storage.path,
@@ -193,6 +203,11 @@ export function getConfigSummary(): ConfigSummary {
             corsOrigin: security.corsOrigin,
             rateLimitMaxRequests: security.rateLimitMaxRequests,
             otpMaxAttempts: security.otpMaxAttempts,
+        },
+        auth: {
+            jwtSecret: !!auth.jwtSecret,
+            allowedEmailDomain: auth.allowedEmailDomain,
+            allowSelfRegistration: auth.allowSelfRegistration,
         },
         logging: {
             level: logging.level,
@@ -215,9 +230,9 @@ export function getConfigSummary(): ConfigSummary {
 export function validateConfiguration(): boolean {
     const errors: string[] = [];
 
-    // Check required paths exist or can be created
-    if (!database.path) {
-        errors.push('Database path is required');
+    // Phase 6: PostgreSQL required
+    if (!database.databaseUrl || database.databaseUrl.trim() === '') {
+        errors.push('DATABASE_URL is required (PostgreSQL connection string)');
     }
 
     if (!storage.path) {
@@ -236,6 +251,11 @@ export function validateConfiguration(): boolean {
         errors.push(
             'ENCRYPTION_ENABLED is true but ENCRYPTION_MASTER_KEY is missing or invalid (must be 32 bytes: 64 hex chars or 44 base64 chars)',
         );
+    }
+
+    // Auth: require JWT secret
+    if (!auth.jwtSecret || auth.jwtSecret.trim() === '') {
+        errors.push('JWT_SECRET is required for authentication');
     }
 
     if (errors.length > 0) {

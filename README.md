@@ -43,7 +43,7 @@ npm run dev
 npm run build
 ```
 
-### Backend (Node.js + Express + SQLite)
+### Backend (Node.js + Express + PostgreSQL)
 
 ```bash
 cd server
@@ -240,7 +240,7 @@ For detailed explanations of the cryptographic and security concepts used (AES-2
 
 ### Database Security
 
-- **SQLite with Foreign Keys** - Referential integrity enforced
+- **PostgreSQL with Foreign Keys** - Referential integrity enforced
 - **Indexed Queries** - Performance optimization on sensitive fields
 - **Audit Logging** - Per-recipient and per-file access tracking
 - **Automatic Cleanup** - Expired files automatically removed
@@ -325,7 +325,7 @@ Requires Web Crypto API support.
 ### Backend (Node.js + Express)
 
 - **Express Framework** - Modular route-based architecture
-- **SQLite Database** - Lightweight, serverless with migrations
+- **PostgreSQL Database** - Migrations on init, connection via DATABASE_URL
 - **Service Layer** - Separated concerns (crypto, email, database, storage)
 - **Environment Configuration** - All settings via environment variables
 - **Error Handling** - Comprehensive try-catch with user-friendly messages

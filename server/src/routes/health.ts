@@ -11,7 +11,7 @@ import { server } from '../config';
 import { sendError } from '../lib/errorResponse';
 import { healthCheck as dbHealthCheck, getDatabaseStats } from '../services/database';
 import { getStorageStats, healthCheck as storageHealthCheck } from '../services/file-storage';
-import type { HealthResponse } from '../types/api';
+import { HealthStatus, type HealthResponse } from '../types/api';
 
 const router: express.Router = express.Router();
 
@@ -30,14 +30,16 @@ router.get('/', async (_req: Request, res: Response<HealthResponse>) => {
         const storageHealth = await storageHealthCheck();
 
         // Get system stats
-        const dbStats = dbHealth.status === 'healthy' ? await getDatabaseStats() : null;
-        const storageStats = storageHealth.status === 'healthy' ? await getStorageStats() : null;
+        const dbStats = dbHealth.status === HealthStatus.Healthy ? await getDatabaseStats() : null;
+        const storageStats =
+            storageHealth.status === HealthStatus.Healthy ? await getStorageStats() : null;
 
         // Determine overall health
         const overallHealth =
-            dbHealth.status === 'healthy' && storageHealth.status === 'healthy'
-                ? 'healthy'
-                : 'unhealthy';
+            dbHealth.status === HealthStatus.Healthy &&
+            storageHealth.status === HealthStatus.Healthy
+                ? HealthStatus.Healthy
+                : HealthStatus.Unhealthy;
 
         // Response data
         const healthData: HealthResponse = {
@@ -58,7 +60,7 @@ router.get('/', async (_req: Request, res: Response<HealthResponse>) => {
         };
 
         // Return appropriate status code
-        const statusCode = overallHealth === 'healthy' ? 200 : 503;
+        const statusCode = overallHealth === HealthStatus.Healthy ? 200 : 503;
 
         res.status(statusCode).json(healthData);
     } catch (error) {

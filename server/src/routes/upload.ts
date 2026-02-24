@@ -20,6 +20,7 @@ import { sendError } from '../lib/errorResponse';
 import { sendDownloadLinkEmail, sendOTPEmail } from '../services/email';
 import { saveFile } from '../services/file-storage';
 import type { UploadRequest, UploadResponse, RecipientPayload } from '../types/api';
+import { ExpiryType } from '../types/database';
 
 const router: express.Router = express.Router();
 const RADIX_EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@radixweb\.com$/;
@@ -72,7 +73,7 @@ const uploadValidation = [
         .withMessage('Expiry minutes must be between 5 and 1440'),
 
     body('expiryType')
-        .isIn(['one-time', 'time-based'])
+        .isIn([ExpiryType.OneTime, ExpiryType.TimeBased])
         .withMessage('Expiry type must be "one-time" or "time-based"'),
 
     // New: recipients JSON payload (optional but validated if present)
@@ -236,10 +237,36 @@ router.post(
                 );
             }
 
-            // Use first recipient's email for legacy files.recipient_email (NOT NULL)
-            const primaryRecipientEmail = recipientsPayload[0]!.email;
+            // Reject self-send (sender cannot be in recipient list)
+            const senderEmail = (uploadReq as Request & { user?: { email: string } }).user?.email;
+            if (senderEmail) {
+                const selfSend = recipientsPayload.some(
+                    (r) => r.email.toLowerCase() === senderEmail.toLowerCase(),
+                );
+                if (selfSend) {
+                    return sendError(
+                        res,
+                        400,
+                        'Invalid recipients',
+                        'You cannot send a file to yourself.',
+                    );
+                }
+            }
 
-            // Create database record (legacy fields kept for backward compatibility)
+            // Use first recipient's email for legacy files.recipient_email (NOT NULL)
+            const firstRecipient = recipientsPayload[0];
+            if (!firstRecipient) {
+                return sendError(
+                    res,
+                    400,
+                    'Invalid recipients',
+                    'At least one recipient is required',
+                );
+            }
+            const primaryRecipientEmail = firstRecipient.email;
+
+            // Create database record (Phase 6: uploaded_by_user_id from auth)
+            const userId = (uploadReq as Request & { user?: { id: string } }).user?.id ?? null;
             const recordId = await createFileRecord({
                 fileId,
                 fileName,
@@ -248,9 +275,10 @@ router.post(
                 recipientEmail: primaryRecipientEmail,
                 wrappedKey: wrappedKeyBuffer,
                 wrappedKeySalt: wrappedKeySaltBuffer,
-                otpHash: recipientsPayload[0]!.otpHash,
+                otpHash: firstRecipient.otpHash,
                 expiryMinutes,
                 expiryType,
+                uploadedByUserId: userId,
             });
             console.log('[UPLOAD] DB record created:', recordId);
 
@@ -264,11 +292,16 @@ router.post(
                     wrappedKey: recipient.wrappedKey,
                     wrappedKeySalt: recipient.wrappedKeySalt,
                 });
-                recipientIds.push({ id: recipientId, email: recipient.email, otp: recipient.otp });
+                recipientIds.push({
+                    id: recipientId,
+                    email: recipient.email,
+                    otp: recipient.otp,
+                });
             }
 
             // Generate download URL (frontend page where recipient enters OTP)
-            const downloadUrl = `${server.downloadPageBaseUrl}?fileId=${fileId}`;
+            const base = server.downloadPageBaseUrl.replace(/\/$/, '');
+            const downloadUrl = `${base}/receive-file?fileId=${fileId}`;
 
             // Log successful upload
             await logAuditEvent(
@@ -299,7 +332,12 @@ router.post(
             });
 
             // Send emails asynchronously (don't block response)
+            const resolvedFileId = fileId;
             setImmediate(async () => {
+                if (resolvedFileId === null) {
+                    console.error('fileId missing in email callback');
+                    return;
+                }
                 try {
                     // Send per-recipient emails
                     for (const recipient of recipientIds) {
@@ -314,25 +352,40 @@ router.post(
                         // Send OTP email (separate channel for security)
                         await sendOTPEmail(recipient.email, recipientFileBody);
 
-                        // Per-recipient audit logging
-                        await logRecipientAuditEvent(
-                            fileId!,
-                            recipient.id,
-                            'otp_sent',
-                            uploadReq.ip || 'unknown',
-                            uploadReq.get('User-Agent') || 'unknown',
-                            {
-                                email: recipient.email,
-                            },
-                        );
+                        // Per-recipient audit logging (skip if recipient row missing, e.g. FK race)
+                        try {
+                            await logRecipientAuditEvent(
+                                resolvedFileId,
+                                recipient.id,
+                                'otp_sent',
+                                uploadReq.ip || 'unknown',
+                                uploadReq.get('User-Agent') || 'unknown',
+                                {
+                                    email: recipient.email,
+                                },
+                            );
+                        } catch (auditErr: unknown) {
+                            const code = (auditErr as { code?: string })?.code;
+                            if (code === '23503') {
+                                await logAuditEvent(
+                                    resolvedFileId,
+                                    'recipient_audit_skipped',
+                                    uploadReq.ip || 'unknown',
+                                    uploadReq.get('User-Agent') || 'unknown',
+                                    { recipientId: recipient.id, email: recipient.email },
+                                ).catch(() => {});
+                            } else {
+                                throw auditErr;
+                            }
+                        }
                     }
 
-                    console.log(`📧 Emails sent for file ${fileId}`);
+                    console.log(`📧 Emails sent for file ${resolvedFileId}`);
                 } catch (emailError) {
                     console.error('Failed to send emails:', emailError);
                     // Log email failure but don't affect upload success
                     await logAuditEvent(
-                        fileId!,
+                        resolvedFileId,
                         'email_failed',
                         uploadReq.ip || 'unknown',
                         uploadReq.get('User-Agent') || 'unknown',

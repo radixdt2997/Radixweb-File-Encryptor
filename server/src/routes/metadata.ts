@@ -71,7 +71,12 @@ router.get(
                     expiryTime: file.expiry_time,
                 });
 
-                return sendError(res, 404, 'File Not Found', 'The requested file does not exist');
+                return sendError(
+                    res,
+                    404,
+                    'File Expired',
+                    'Request no longer exists please ask sender to send again.',
+                );
             }
 
             // Log metadata access (for analytics)

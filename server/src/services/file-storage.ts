@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { encryption, storage } from '../config';
 import { decryptFilePayload, encryptFilePayload, ENCRYPTED_HEADER_LENGTH } from '../lib/encryption';
 import type { FileStorageResult, FileMetadata, StorageHealthCheck } from '../types/services';
-import type { StorageStats } from '../types/api';
+import { HealthStatus, type StorageStats } from '../types/api';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -300,14 +300,14 @@ export async function healthCheck(): Promise<StorageHealthCheck> {
         const stats = await getStorageStats();
 
         return {
-            status: 'healthy',
+            status: HealthStatus.Healthy,
             storage: 'accessible',
             stats,
         };
     } catch (error) {
         const err = error as Error;
         return {
-            status: 'unhealthy',
+            status: HealthStatus.Unhealthy,
             storage: 'inaccessible',
             error: err.message,
         };

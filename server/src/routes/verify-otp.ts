@@ -21,6 +21,7 @@ import {
     logRecipientAuditEvent,
 } from '../services/database';
 import type { VerifyOTPRequest, VerifyOTPResponse } from '../types/api';
+import { ExpiryType, FileStatus } from '../types/database';
 
 const router: express.Router = express.Router();
 
@@ -118,8 +119,8 @@ router.post(
                 );
             }
 
-            // Check if one-time file was already downloaded
-            if (file.expiry_type === 'one-time' && file.status === 'used') {
+            // Check if one-time file was already downloaded (status is expired or used)
+            if (file.expiry_type === ExpiryType.OneTime && file.status !== FileStatus.Active) {
                 await logAuditEvent(fileId, 'otp_failed', clientIP, userAgent, {
                     reason: 'already_used',
                 });
@@ -127,8 +128,8 @@ router.post(
                 return sendError(
                     res,
                     400,
-                    'File Already Used',
-                    'This file has already been downloaded',
+                    'File Expired',
+                    'This file has already been downloaded and is no longer available',
                 );
             }
 

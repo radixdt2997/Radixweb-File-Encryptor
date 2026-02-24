@@ -21,6 +21,7 @@ import { getOpenApiSpec } from './openapi';
 import swaggerUi from 'swagger-ui-express';
 
 // Routes
+import authRoutes from './routes/auth';
 import downloadRoutes from './routes/download';
 import healthRoutes from './routes/health';
 import metadataRoutes from './routes/metadata';
@@ -28,6 +29,10 @@ import testEmailRoutes from './routes/test-email';
 import uploadRoutes from './routes/upload';
 import verifyRoutes from './routes/verify-otp';
 import recipientsRoutes from './routes/recipients';
+import transactionsRoutes from './routes/transactions';
+
+// Middleware
+import { requireAuth } from './middleware/auth';
 
 // Services
 import { sendError } from './lib/errorResponse';
@@ -79,67 +84,80 @@ app.use(
     }),
 );
 
-// Rate limiting (from config)
-const limiter = rateLimit({
-    windowMs: security.rateLimitWindowMs,
-    max: security.rateLimitMaxRequests,
-    message: {
-        error: 'Too many requests from this IP, please try again later.',
-        retryAfter: Math.ceil(security.rateLimitWindowMs / 1000),
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Rate limiting (from config) — disabled in development
+const noopRateLimit: express.RequestHandler = (_req, _res, next) => next();
+
+const limiter =
+    NODE_ENV === 'development'
+        ? noopRateLimit
+        : rateLimit({
+              windowMs: security.rateLimitWindowMs,
+              max: security.rateLimitMaxRequests,
+              message: {
+                  error: 'Too many requests from this IP, please try again later.',
+                  retryAfter: Math.ceil(security.rateLimitWindowMs / 1000),
+              },
+              standardHeaders: true,
+              legacyHeaders: false,
+          });
 
 app.use('/api/', limiter);
 
-// Stricter rate limiting for OTP verification (from config)
-const strictLimiter = rateLimit({
-    windowMs: security.otpCooldownMs,
-    max: security.otpMaxAttempts,
-    message: {
-        error: 'Too many OTP attempts, please try again later.',
-        retryAfter: Math.ceil(security.otpCooldownMs / 1000),
-    },
-});
+const strictLimiter =
+    NODE_ENV === 'development'
+        ? noopRateLimit
+        : rateLimit({
+              windowMs: security.otpCooldownMs,
+              max: security.otpMaxAttempts,
+              message: {
+                  error: 'Too many OTP attempts, please try again later.',
+                  retryAfter: Math.ceil(security.otpCooldownMs / 1000),
+              },
+          });
 
 app.use('/api/verify-otp', strictLimiter);
 
-// Upload-specific limiter to protect file upload endpoint from abuse
-const uploadLimiter = rateLimit({
-    windowMs: security.uploadLimitWindowMs,
-    max: security.uploadLimitMaxRequests,
-    message: {
-        error: 'Too many uploads from this IP, please try again later.',
-        retryAfter: Math.ceil(security.uploadLimitWindowMs / 1000),
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const uploadLimiter =
+    NODE_ENV === 'development'
+        ? noopRateLimit
+        : rateLimit({
+              windowMs: security.uploadLimitWindowMs,
+              max: security.uploadLimitMaxRequests,
+              message: {
+                  error: 'Too many uploads from this IP, please try again later.',
+                  retryAfter: Math.ceil(security.uploadLimitWindowMs / 1000),
+              },
+              standardHeaders: true,
+              legacyHeaders: false,
+          });
 
-// File access limiter (metadata, download) to prevent enumeration and brute-force
-const fileAccessLimiter = rateLimit({
-    windowMs: security.fileAccessLimitWindowMs,
-    max: security.fileAccessLimitMaxRequests,
-    message: {
-        error: 'Too many file access requests from this IP, please try again later.',
-        retryAfter: Math.ceil(security.fileAccessLimitWindowMs / 1000),
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const fileAccessLimiter =
+    NODE_ENV === 'development'
+        ? noopRateLimit
+        : rateLimit({
+              windowMs: security.fileAccessLimitWindowMs,
+              max: security.fileAccessLimitMaxRequests,
+              message: {
+                  error: 'Too many file access requests from this IP, please try again later.',
+                  retryAfter: Math.ceil(security.fileAccessLimitWindowMs / 1000),
+              },
+              standardHeaders: true,
+              legacyHeaders: false,
+          });
 
-// Recipient list access limiter
-const recipientAccessLimiter = rateLimit({
-    windowMs: security.recipientAccessLimitWindowMs,
-    max: security.recipientAccessLimitMaxRequests,
-    message: {
-        error: 'Too many recipient access attempts from this IP, please try again later.',
-        retryAfter: Math.ceil(security.recipientAccessLimitWindowMs / 1000),
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const recipientAccessLimiter =
+    NODE_ENV === 'development'
+        ? noopRateLimit
+        : rateLimit({
+              windowMs: security.recipientAccessLimitWindowMs,
+              max: security.recipientAccessLimitMaxRequests,
+              message: {
+                  error: 'Too many recipient access attempts from this IP, please try again later.',
+                  retryAfter: Math.ceil(security.recipientAccessLimitWindowMs / 1000),
+              },
+              standardHeaders: true,
+              legacyHeaders: false,
+          });
 
 // ============================================================================
 // GENERAL MIDDLEWARE
@@ -204,13 +222,17 @@ if (server.docsEnabled) {
 // Health check (no auth needed)
 app.use('/api/health', healthRoutes);
 
+// Auth (Phase 6)
+app.use('/api/auth', authRoutes);
+
 // Test email (development only)
 app.use('/api/test-email', testEmailRoutes);
 
-// File upload (with multiple file handling)
+// File upload (Phase 6: auth required)
 app.use(
     '/api/upload',
     uploadLimiter,
+    requireAuth,
     upload.fields([
         { name: 'encryptedData', maxCount: 1 },
         { name: 'wrappedKey', maxCount: 1 },
@@ -229,7 +251,10 @@ app.use('/api/download', fileAccessLimiter, downloadRoutes);
 app.use('/api/metadata', fileAccessLimiter, metadataRoutes);
 
 // Recipient management (with stricter rate limiting on access)
-app.use('/api/files', recipientAccessLimiter, recipientsRoutes);
+app.use('/api/files', recipientAccessLimiter, requireAuth, recipientsRoutes);
+
+// Transactions (Phase 6: auth required)
+app.use('/api/transactions', recipientAccessLimiter, requireAuth, transactionsRoutes);
 
 // ============================================================================
 // ERROR HANDLING

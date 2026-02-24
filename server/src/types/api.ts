@@ -4,6 +4,9 @@
  * Type definitions for all API endpoints in the Secure File Server.
  */
 
+import type { DatabaseHealthCheck, ExpiryType, TransactionRole } from './database';
+import { StorageHealthCheck } from './services';
+
 /**
  * Standard API error response from the server.
  * All error responses use this shape so the client can parse them consistently.
@@ -34,7 +37,7 @@ export interface RecipientPayload {
 export interface UploadRequest {
     fileName: string;
     expiryMinutes: number;
-    expiryType: 'one-time' | 'time-based';
+    expiryType: ExpiryType;
     recipientEmail?: string; // Legacy single-recipient field
     otpHash?: string; // Legacy field
     otp?: string; // Legacy field
@@ -84,6 +87,26 @@ export interface MetadataResponse {
 }
 
 /**
+ * Response for GET /api/transactions (Phase 6)
+ */
+export interface TransactionsResponse {
+    items: TransactionItem[];
+    total: number;
+    page: number;
+    limit: number;
+}
+
+export interface TransactionItem {
+    fileId: string;
+    fileName: string;
+    uploadedAt: string;
+    expiryTime: string;
+    status: string;
+    recipientCount: number;
+    role: TransactionRole;
+}
+
+/**
  * Response for GET /api/files/:fileId/recipients
  */
 export interface RecipientsListResponse {
@@ -119,27 +142,23 @@ export interface TestEmailResponse {
     to: string;
 }
 
+export enum HealthStatus {
+    Healthy = 'healthy',
+    Unhealthy = 'unhealthy',
+}
+
 /**
  * Response for GET /api/health
  */
 export interface HealthResponse {
-    status: 'healthy' | 'unhealthy';
+    status: HealthStatus;
     timestamp: string;
     uptime: number;
     version: string;
     environment: string;
     services: {
-        database: {
-            status: 'healthy' | 'unhealthy';
-            database: string;
-            error?: string;
-        };
-        storage: {
-            status: 'healthy' | 'unhealthy';
-            storage: string;
-            error?: string;
-            stats?: unknown;
-        };
+        database: DatabaseHealthCheck;
+        storage: StorageHealthCheck;
     };
     stats: {
         database: DatabaseStats | null;
