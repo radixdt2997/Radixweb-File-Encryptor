@@ -4,23 +4,27 @@
  * Uses in-memory storage for development and SQLite for production.
  */
 
-import Database from "better-sqlite3";
-import type { Database as DatabaseType } from "better-sqlite3";
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { database as dbConfig, encryption as encryptionConfig, logging as loggingConfig } from "../config";
-import { decryptDbField, encryptDbField } from "../lib/encryption";
+import Database from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import {
+    database as dbConfig,
+    encryption as encryptionConfig,
+    logging as loggingConfig,
+} from '../config';
+import { decryptDbField, encryptDbField } from '../lib/encryption';
 import type {
-  FileRecord,
-  RecipientRecord,
-  CreateFileData,
-  CreateRecipientData,
-  UpdateFileStatusData,
-  DatabaseHealthCheck,
-} from "../types/database";
-import type { DatabaseStats } from "../types/api";
+    FileRecord,
+    RecipientRecord,
+    CreateFileData,
+    CreateRecipientData,
+    UpdateFileStatusData,
+    DatabaseHealthCheck,
+} from '../types/database';
+import type { DatabaseStats } from '../types/api';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,45 +32,42 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_ENCRYPTED_VERSION = 0x01;
 
 function encryptForDb(plain: Buffer): Buffer {
-  if (!encryptionConfig.enabled || !encryptionConfig.masterKey) return plain;
-  return Buffer.concat([
-    Buffer.from([DB_ENCRYPTED_VERSION]),
-    encryptDbField(plain),
-  ]);
+    if (!encryptionConfig.enabled || !encryptionConfig.masterKey) return plain;
+    return Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(plain)]);
 }
 
 function decryptFromDb(stored: Buffer): Buffer {
-  if (stored.length > 0 && stored[0] === DB_ENCRYPTED_VERSION) {
-    return decryptDbField(stored.subarray(1));
-  }
-  return stored;
+    if (stored.length > 0 && stored[0] === DB_ENCRYPTED_VERSION) {
+        return decryptDbField(stored.subarray(1));
+    }
+    return stored;
 }
 
 function toBuffer(value: Buffer | string): Buffer {
-  return Buffer.isBuffer(value) ? value : Buffer.from(value, "base64");
+    return Buffer.isBuffer(value) ? value : Buffer.from(value, 'base64');
 }
 
 // Use config for SQLite vs in-memory and DB path
 const USE_SQLITE = dbConfig.useSqlite;
 const dbPathResolved = path.isAbsolute(dbConfig.path)
-  ? dbConfig.path
-  : path.join(__dirname, "../..", dbConfig.path);
+    ? dbConfig.path
+    : path.join(__dirname, '../..', dbConfig.path);
 
 // SQLite database instance
 let db: DatabaseType | null = null;
 if (USE_SQLITE) {
-  const dbPath = dbPathResolved;
+    const dbPath = dbPathResolved;
 
-  // Ensure data directory exists
-  const dataDir = path.dirname(dbPath);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+    // Ensure data directory exists
+    const dataDir = path.dirname(dbPath);
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
 
-  db = new Database(dbPath);
+    db = new Database(dbPath);
 
-  // Create tables
-  db.exec(`
+    // Create tables
+    db.exec(`
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_id TEXT UNIQUE NOT NULL,
@@ -87,7 +88,7 @@ if (USE_SQLITE) {
         )
     `);
 
-  db.exec(`
+    db.exec(`
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_id TEXT NOT NULL,
@@ -99,7 +100,7 @@ if (USE_SQLITE) {
         )
     `);
 
-  db.exec(`
+    db.exec(`
         CREATE TABLE IF NOT EXISTS recipients (
             id TEXT PRIMARY KEY,
             file_id TEXT NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
@@ -115,7 +116,7 @@ if (USE_SQLITE) {
         )
     `);
 
-  db.exec(`
+    db.exec(`
         CREATE TABLE IF NOT EXISTS recipient_audit_logs (
             id TEXT PRIMARY KEY,
             file_id TEXT NOT NULL,
@@ -128,35 +129,31 @@ if (USE_SQLITE) {
         )
     `);
 
-  // Ensure new recipient-related columns exist on files table (idempotent)
-  function ensureColumnExists(
-    tableName: string,
-    columnName: string,
-    columnDef: string,
-  ): void {
-    const infoStmt = db!.prepare(`PRAGMA table_info(${tableName})`);
-    const columns = infoStmt.all() as Array<{ name: string }>;
-    const exists = columns.some((col) => col.name === columnName);
-    if (!exists) {
-      db!.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+    // Ensure new recipient-related columns exist on files table (idempotent)
+    function ensureColumnExists(tableName: string, columnName: string, columnDef: string): void {
+        const infoStmt = db!.prepare(`PRAGMA table_info(${tableName})`);
+        const columns = infoStmt.all() as Array<{ name: string }>;
+        const exists = columns.some((col) => col.name === columnName);
+        if (!exists) {
+            db!.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+        }
     }
-  }
 
-  ensureColumnExists("files", "total_recipients", "INTEGER DEFAULT 1");
-  ensureColumnExists("files", "verified_recipients", "INTEGER DEFAULT 0");
-  ensureColumnExists("files", "downloaded_recipients", "INTEGER DEFAULT 0");
+    ensureColumnExists('files', 'total_recipients', 'INTEGER DEFAULT 1');
+    ensureColumnExists('files', 'verified_recipients', 'INTEGER DEFAULT 0');
+    ensureColumnExists('files', 'downloaded_recipients', 'INTEGER DEFAULT 0');
 
-  // One-time migration: move legacy single-recipient data into recipients table
-  const filesToMigrateStmt = db.prepare(`
+    // One-time migration: move legacy single-recipient data into recipients table
+    const filesToMigrateStmt = db.prepare(`
         SELECT * FROM files
         WHERE recipient_email IS NOT NULL
           AND file_id NOT IN (SELECT DISTINCT file_id FROM recipients)
     `);
 
-  const legacyFiles = filesToMigrateStmt.all() as FileRecord[];
+    const legacyFiles = filesToMigrateStmt.all() as FileRecord[];
 
-  if (legacyFiles.length > 0) {
-    const insertRecipientStmt = db.prepare(`
+    if (legacyFiles.length > 0) {
+        const insertRecipientStmt = db.prepare(`
             INSERT INTO recipients (
                 id,
                 file_id,
@@ -172,7 +169,7 @@ if (USE_SQLITE) {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-    const updateFileCountersStmt = db.prepare(`
+        const updateFileCountersStmt = db.prepare(`
             UPDATE files
             SET total_recipients = 1,
                 verified_recipients = CASE WHEN downloaded_at IS NOT NULL THEN 1 ELSE 0 END,
@@ -180,419 +177,407 @@ if (USE_SQLITE) {
             WHERE file_id = ?
         `);
 
-    const migrateTxn = db.transaction((rows: FileRecord[]) => {
-      for (const file of rows) {
-        const recipientId = crypto.randomUUID();
+        const migrateTxn = db.transaction((rows: FileRecord[]) => {
+            for (const file of rows) {
+                const recipientId = crypto.randomUUID();
 
-        insertRecipientStmt.run(
-          recipientId,
-          file.file_id,
-          file.recipient_email,
-          file.otp_hash,
-          file.wrapped_key,
-          file.wrapped_key_salt,
-          null, // otp_verified_at - unknown for legacy, keep null
-          file.downloaded_at || null,
-          file.otp_attempts ?? 0,
-          file.last_attempt_at || null,
-          file.created_at || new Date().toISOString(),
-        );
+                insertRecipientStmt.run(
+                    recipientId,
+                    file.file_id,
+                    file.recipient_email,
+                    file.otp_hash,
+                    file.wrapped_key,
+                    file.wrapped_key_salt,
+                    null, // otp_verified_at - unknown for legacy, keep null
+                    file.downloaded_at || null,
+                    file.otp_attempts ?? 0,
+                    file.last_attempt_at || null,
+                    file.created_at || new Date().toISOString(),
+                );
 
-        updateFileCountersStmt.run(file.file_id);
-      }
-    });
+                updateFileCountersStmt.run(file.file_id);
+            }
+        });
 
-    migrateTxn(legacyFiles);
-  }
+        migrateTxn(legacyFiles);
+    }
 
-  // Create useful indexes to improve lookup performance on sensitive fields
-  try {
-    db.exec(`
+    // Create useful indexes to improve lookup performance on sensitive fields
+    try {
+        db.exec(`
         CREATE INDEX IF NOT EXISTS idx_recipients_email ON recipients(email);
       `);
 
-    db.exec(`
+        db.exec(`
         CREATE INDEX IF NOT EXISTS idx_recipients_file_id ON recipients(file_id);
       `);
 
-    db.exec(`
+        db.exec(`
         CREATE INDEX IF NOT EXISTS idx_files_recipient_email ON files(recipient_email);
       `);
 
-    db.exec(`
+        db.exec(`
         CREATE INDEX IF NOT EXISTS idx_audit_logs_file_id ON audit_logs(file_id);
       `);
-  } catch (idxError) {
-    const err = idxError as Error;
-    console.warn("⚠️  Failed to create indexes:", err.message);
-  }
+    } catch (idxError) {
+        const err = idxError as Error;
+        console.warn('⚠️  Failed to create indexes:', err.message);
+    }
 }
 
 // In-memory storage for development
 const files = new Map<string, FileRecord & { id?: number }>();
 const auditLogs: Array<{
-  id: number;
-  file_id: string;
-  event_type: string;
-  ip_address: string | null;
-  user_agent: string | null;
-  details: string;
-  created_at: string;
+    id: number;
+    file_id: string;
+    event_type: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string;
+    created_at: string;
 }> = [];
 const recipients = new Map<string, RecipientRecord>(); // recipientId -> recipient record
 const recipientAuditLogs: Array<{
-  id: string;
-  file_id: string;
-  recipient_id: string;
-  event_type: string;
-  ip_address: string | null;
-  user_agent: string | null;
-  details: string;
-  created_at: string;
+    id: string;
+    file_id: string;
+    recipient_id: string;
+    event_type: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string;
+    created_at: string;
 }> = [];
 
 /**
  * Initialize database
  */
 export async function initDatabase(): Promise<boolean> {
-  try {
-    if (!USE_SQLITE) {
-      // Ensure data directory exists for file storage
-      const dataDir = path.join(__dirname, "../../data");
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      console.log("✅ In-memory database initialized");
-    } else {
-      console.log("✅ SQLite database initialized");
+    try {
+        if (!USE_SQLITE) {
+            // Ensure data directory exists for file storage
+            const dataDir = path.join(__dirname, '../../data');
+            if (!fs.existsSync(dataDir)) {
+                fs.mkdirSync(dataDir, { recursive: true });
+            }
+            console.log('✅ In-memory database initialized');
+        } else {
+            console.log('✅ SQLite database initialized');
+        }
+        return true;
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        throw error;
     }
-    return true;
-  } catch (error) {
-    console.error("❌ Database initialization failed:", error);
-    throw error;
-  }
 }
 
 /**
  * Create a new file record
  */
-export async function createFileRecord(
-  data: CreateFileData,
-): Promise<number | string> {
-  const {
-    fileId,
-    fileName,
-    filePath,
-    fileSize,
-    recipientEmail,
-    wrappedKey,
-    wrappedKeySalt,
-    otpHash,
-    expiryMinutes,
-    expiryType,
-  } = data;
+export async function createFileRecord(data: CreateFileData): Promise<number | string> {
+    const {
+        fileId,
+        fileName,
+        filePath,
+        fileSize,
+        recipientEmail,
+        wrappedKey,
+        wrappedKeySalt,
+        otpHash,
+        expiryMinutes,
+        expiryType,
+    } = data;
 
-  const expiryTime = new Date(
-    Date.now() + expiryMinutes * 60 * 1000,
-  ).toISOString();
+    const expiryTime = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
 
-  const wrappedKeyBuf = Buffer.isBuffer(wrappedKey) ? wrappedKey : Buffer.from(wrappedKey);
-  const wrappedKeySaltBuf = Buffer.isBuffer(wrappedKeySalt) ? wrappedKeySalt : Buffer.from(wrappedKeySalt);
-  const storedWrappedKey = encryptForDb(wrappedKeyBuf);
-  const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuf);
+    const wrappedKeyBuf = Buffer.isBuffer(wrappedKey) ? wrappedKey : Buffer.from(wrappedKey);
+    const wrappedKeySaltBuf = Buffer.isBuffer(wrappedKeySalt)
+        ? wrappedKeySalt
+        : Buffer.from(wrappedKeySalt);
+    const storedWrappedKey = encryptForDb(wrappedKeyBuf);
+    const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuf);
 
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       INSERT INTO files (file_id, file_name, file_path, file_size, recipient_email, 
                         wrapped_key, wrapped_key_salt, otp_hash, expiry_type, expiry_time)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(
-      fileId,
-      fileName,
-      filePath,
-      fileSize,
-      recipientEmail,
-      storedWrappedKey,
-      storedWrappedKeySalt,
-      otpHash,
-      expiryType,
-      expiryTime,
-    );
-    return Number(result.lastInsertRowid);
-  } else {
-    const record: FileRecord & { id?: number } = {
-      file_id: fileId,
-      file_name: fileName,
-      file_path: filePath,
-      file_size: fileSize,
-      recipient_email: recipientEmail,
-      wrapped_key: storedWrappedKey,
-      wrapped_key_salt: storedWrappedKeySalt,
-      otp_hash: otpHash,
-      expiry_type: expiryType,
-      expiry_time: expiryTime,
-      status: "active",
-      otp_attempts: 0,
-      last_attempt_at: null,
-      created_at: new Date().toISOString(),
-      downloaded_at: null,
-    };
-    record.id = Date.now();
-    files.set(fileId, record);
-    return record.id;
-  }
+        const result = stmt.run(
+            fileId,
+            fileName,
+            filePath,
+            fileSize,
+            recipientEmail,
+            storedWrappedKey,
+            storedWrappedKeySalt,
+            otpHash,
+            expiryType,
+            expiryTime,
+        );
+        return Number(result.lastInsertRowid);
+    } else {
+        const record: FileRecord & { id?: number } = {
+            file_id: fileId,
+            file_name: fileName,
+            file_path: filePath,
+            file_size: fileSize,
+            recipient_email: recipientEmail,
+            wrapped_key: storedWrappedKey,
+            wrapped_key_salt: storedWrappedKeySalt,
+            otp_hash: otpHash,
+            expiry_type: expiryType,
+            expiry_time: expiryTime,
+            status: 'active',
+            otp_attempts: 0,
+            last_attempt_at: null,
+            created_at: new Date().toISOString(),
+            downloaded_at: null,
+        };
+        record.id = Date.now();
+        files.set(fileId, record);
+        return record.id;
+    }
 }
 
 function decryptFileRecord(raw: FileRecord): FileRecord {
-  return {
-    ...raw,
-    wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
-    wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
-  };
+    return {
+        ...raw,
+        wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
+        wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
+    };
 }
 
 /**
  * Get file record by fileId
  */
-export async function getFileRecord(
-  fileId: string,
-): Promise<FileRecord | null> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare("SELECT * FROM files WHERE file_id = ?");
-    const result = stmt.get(fileId) as FileRecord | undefined;
-    return result ? decryptFileRecord(result) : null;
-  } else {
-    const raw = files.get(fileId);
-    return raw ? decryptFileRecord(raw) : null;
-  }
+export async function getFileRecord(fileId: string): Promise<FileRecord | null> {
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare('SELECT * FROM files WHERE file_id = ?');
+        const result = stmt.get(fileId) as FileRecord | undefined;
+        return result ? decryptFileRecord(result) : null;
+    } else {
+        const raw = files.get(fileId);
+        return raw ? decryptFileRecord(raw) : null;
+    }
 }
 
 /**
  * Get file record by fileId (alias)
  */
 export async function getFileById(fileId: string): Promise<FileRecord | null> {
-  return getFileRecord(fileId);
+    return getFileRecord(fileId);
 }
 
 /**
  * Update file status
  */
 export async function updateFileStatus(
-  fileId: string,
-  status: string | null,
-  additionalData: UpdateFileStatusData = {},
+    fileId: string,
+    status: string | null,
+    additionalData: UpdateFileStatusData = {},
 ): Promise<void> {
-  if (USE_SQLITE && db) {
-    const updates: string[] = [];
-    const values: unknown[] = [];
+    if (USE_SQLITE && db) {
+        const updates: string[] = [];
+        const values: unknown[] = [];
 
-    if (status) {
-      updates.push("status = ?");
-      values.push(status);
+        if (status) {
+            updates.push('status = ?');
+            values.push(status);
+        }
+
+        if (additionalData.downloadedAt) {
+            updates.push('downloaded_at = ?');
+            values.push(additionalData.downloadedAt);
+        }
+
+        if (additionalData.otpAttempts !== undefined) {
+            updates.push('otp_attempts = ?');
+            values.push(additionalData.otpAttempts);
+        }
+
+        if (additionalData.lastAttemptAt) {
+            updates.push('last_attempt_at = ?');
+            values.push(additionalData.lastAttemptAt);
+        }
+
+        if (updates.length > 0) {
+            const stmt = db.prepare(`UPDATE files SET ${updates.join(', ')} WHERE file_id = ?`);
+            stmt.run(...values, fileId);
+        }
+    } else {
+        const file = files.get(fileId);
+        if (!file) return;
+
+        if (status) {
+            file.status = status as 'active' | 'used' | 'expired';
+        }
+
+        if (additionalData.downloadedAt) {
+            file.downloaded_at = additionalData.downloadedAt;
+        }
+
+        if (additionalData.otpAttempts !== undefined) {
+            file.otp_attempts = additionalData.otpAttempts;
+        }
+
+        if (additionalData.lastAttemptAt) {
+            file.last_attempt_at = additionalData.lastAttemptAt;
+        }
+
+        files.set(fileId, file);
     }
-
-    if (additionalData.downloadedAt) {
-      updates.push("downloaded_at = ?");
-      values.push(additionalData.downloadedAt);
-    }
-
-    if (additionalData.otpAttempts !== undefined) {
-      updates.push("otp_attempts = ?");
-      values.push(additionalData.otpAttempts);
-    }
-
-    if (additionalData.lastAttemptAt) {
-      updates.push("last_attempt_at = ?");
-      values.push(additionalData.lastAttemptAt);
-    }
-
-    if (updates.length > 0) {
-      const stmt = db.prepare(
-        `UPDATE files SET ${updates.join(", ")} WHERE file_id = ?`,
-      );
-      stmt.run(...values, fileId);
-    }
-  } else {
-    const file = files.get(fileId);
-    if (!file) return;
-
-    if (status) {
-      file.status = status as "active" | "used" | "expired";
-    }
-
-    if (additionalData.downloadedAt) {
-      file.downloaded_at = additionalData.downloadedAt;
-    }
-
-    if (additionalData.otpAttempts !== undefined) {
-      file.otp_attempts = additionalData.otpAttempts;
-    }
-
-    if (additionalData.lastAttemptAt) {
-      file.last_attempt_at = additionalData.lastAttemptAt;
-    }
-
-    files.set(fileId, file);
-  }
 }
 
 /**
  * Check if file is expired
  */
 export async function isFileExpired(fileId: string): Promise<boolean> {
-  const file = await getFileRecord(fileId);
-  if (!file) return true;
+    const file = await getFileRecord(fileId);
+    if (!file) return true;
 
-  const now = new Date();
-  const expiryTime = new Date(file.expiry_time);
+    const now = new Date();
+    const expiryTime = new Date(file.expiry_time);
 
-  return now > expiryTime || file.status !== "active";
+    return now > expiryTime || file.status !== 'active';
 }
 
 /**
  * Health check for database
  */
 export async function healthCheck(): Promise<DatabaseHealthCheck> {
-  try {
-    if (USE_SQLITE && db) {
-      db.prepare("SELECT 1").get();
+    try {
+        if (USE_SQLITE && db) {
+            db.prepare('SELECT 1').get();
+        }
+        return { status: 'healthy', database: 'connected' };
+    } catch (error) {
+        const err = error as Error;
+        return {
+            status: 'unhealthy',
+            database: 'disconnected',
+            error: err.message,
+        };
     }
-    return { status: "healthy", database: "connected" };
-  } catch (error) {
-    const err = error as Error;
-    return {
-      status: "unhealthy",
-      database: "disconnected",
-      error: err.message,
-    };
-  }
 }
 
 /**
  * Get database statistics
  */
 export async function getDatabaseStats(): Promise<DatabaseStats> {
-  if (USE_SQLITE && db) {
-    const activeStmt = db.prepare(
-      "SELECT COUNT(*) as count FROM files WHERE status = 'active'",
-    );
-    const usedStmt = db.prepare(
-      "SELECT COUNT(*) as count FROM files WHERE status = 'used'",
-    );
-    const expiredStmt = db.prepare(
-      "SELECT COUNT(*) as count FROM files WHERE status = 'expired'",
-    );
-    const sizeStmt = db.prepare(
-      "SELECT SUM(file_size) as total FROM files WHERE status = 'active'",
-    );
-    const logsStmt = db.prepare("SELECT COUNT(*) as count FROM audit_logs");
+    if (USE_SQLITE && db) {
+        const activeStmt = db.prepare(
+            "SELECT COUNT(*) as count FROM files WHERE status = 'active'",
+        );
+        const usedStmt = db.prepare("SELECT COUNT(*) as count FROM files WHERE status = 'used'");
+        const expiredStmt = db.prepare(
+            "SELECT COUNT(*) as count FROM files WHERE status = 'expired'",
+        );
+        const sizeStmt = db.prepare(
+            "SELECT SUM(file_size) as total FROM files WHERE status = 'active'",
+        );
+        const logsStmt = db.prepare('SELECT COUNT(*) as count FROM audit_logs');
 
-    const activeResult = activeStmt.get() as { count: number };
-    const usedResult = usedStmt.get() as { count: number };
-    const expiredResult = expiredStmt.get() as { count: number };
-    const sizeResult = sizeStmt.get() as { total: number | null };
-    const logsResult = logsStmt.get() as { count: number };
+        const activeResult = activeStmt.get() as { count: number };
+        const usedResult = usedStmt.get() as { count: number };
+        const expiredResult = expiredStmt.get() as { count: number };
+        const sizeResult = sizeStmt.get() as { total: number | null };
+        const logsResult = logsStmt.get() as { count: number };
 
-    return {
-      active_files: activeResult.count,
-      used_files: usedResult.count,
-      expired_files: expiredResult.count,
-      total_logs: logsResult.count,
-      total_size_bytes: sizeResult.total || 0,
-    };
-  } else {
-    const allFiles = Array.from(files.values());
+        return {
+            active_files: activeResult.count,
+            used_files: usedResult.count,
+            expired_files: expiredResult.count,
+            total_logs: logsResult.count,
+            total_size_bytes: sizeResult.total || 0,
+        };
+    } else {
+        const allFiles = Array.from(files.values());
 
-    return {
-      active_files: allFiles.filter((f) => f.status === "active").length,
-      used_files: allFiles.filter((f) => f.status === "used").length,
-      expired_files: allFiles.filter((f) => f.status === "expired").length,
-      total_logs: auditLogs.length,
-      total_size_bytes: allFiles
-        .filter((f) => f.status === "active")
-        .reduce((sum, f) => sum + f.file_size, 0),
-    };
-  }
+        return {
+            active_files: allFiles.filter((f) => f.status === 'active').length,
+            used_files: allFiles.filter((f) => f.status === 'used').length,
+            expired_files: allFiles.filter((f) => f.status === 'expired').length,
+            total_logs: auditLogs.length,
+            total_size_bytes: allFiles
+                .filter((f) => f.status === 'active')
+                .reduce((sum, f) => sum + f.file_size, 0),
+        };
+    }
 }
 
 /**
  * Increment OTP attempts counter
  */
 export async function incrementOTPAttempts(fileId: string): Promise<void> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       UPDATE files 
       SET otp_attempts = otp_attempts + 1, last_attempt_at = CURRENT_TIMESTAMP 
       WHERE file_id = ?
     `);
-    stmt.run(fileId);
-  } else {
-    const file = files.get(fileId);
-    if (!file) return;
+        stmt.run(fileId);
+    } else {
+        const file = files.get(fileId);
+        if (!file) return;
 
-    file.otp_attempts = (file.otp_attempts || 0) + 1;
-    file.last_attempt_at = new Date().toISOString();
+        file.otp_attempts = (file.otp_attempts || 0) + 1;
+        file.last_attempt_at = new Date().toISOString();
 
-    files.set(fileId, file);
-  }
+        files.set(fileId, file);
+    }
 }
 
 /**
  * Update file record
  */
 export async function updateFileRecord(
-  fileId: string,
-  updates: Partial<FileRecord>,
+    fileId: string,
+    updates: Partial<FileRecord>,
 ): Promise<void> {
-  if (USE_SQLITE && db) {
-    const fields = Object.keys(updates)
-      .map((key) => `${key} = ?`)
-      .join(", ");
-    const values = Object.values(updates);
-    const stmt = db.prepare(`UPDATE files SET ${fields} WHERE file_id = ?`);
-    stmt.run(...values, fileId);
-  } else {
-    const file = files.get(fileId);
-    if (!file) return;
+    if (USE_SQLITE && db) {
+        const fields = Object.keys(updates)
+            .map((key) => `${key} = ?`)
+            .join(', ');
+        const values = Object.values(updates);
+        const stmt = db.prepare(`UPDATE files SET ${fields} WHERE file_id = ?`);
+        stmt.run(...values, fileId);
+    } else {
+        const file = files.get(fileId);
+        if (!file) return;
 
-    Object.assign(file, updates);
-    files.set(fileId, file);
-  }
+        Object.assign(file, updates);
+        files.set(fileId, file);
+    }
 }
 
 /**
  * Create a recipient record
  */
-export async function createRecipientRecord(
-  data: CreateRecipientData,
-): Promise<string> {
-  const {
-    id = crypto.randomUUID(),
-    fileId,
-    email,
-    otpHash,
-    wrappedKey,
-    wrappedKeySalt,
-    otpVerifiedAt = null,
-    downloadedAt = null,
-    otpAttempts = 0,
-    lastAttemptAt = null,
-  } = data;
+export async function createRecipientRecord(data: CreateRecipientData): Promise<string> {
+    const {
+        id = crypto.randomUUID(),
+        fileId,
+        email,
+        otpHash,
+        wrappedKey,
+        wrappedKeySalt,
+        otpVerifiedAt = null,
+        downloadedAt = null,
+        otpAttempts = 0,
+        lastAttemptAt = null,
+    } = data;
 
-  const createdAt = new Date().toISOString();
+    const createdAt = new Date().toISOString();
 
-  const wrappedKeyBuffer =
-    typeof wrappedKey === "string" ? Buffer.from(wrappedKey, "base64") : wrappedKey;
-  const wrappedKeySaltBuffer =
-    typeof wrappedKeySalt === "string"
-      ? Buffer.from(wrappedKeySalt, "base64")
-      : wrappedKeySalt;
-  const storedWrappedKey = encryptForDb(wrappedKeyBuffer);
-  const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuffer);
+    const wrappedKeyBuffer =
+        typeof wrappedKey === 'string' ? Buffer.from(wrappedKey, 'base64') : wrappedKey;
+    const wrappedKeySaltBuffer =
+        typeof wrappedKeySalt === 'string' ? Buffer.from(wrappedKeySalt, 'base64') : wrappedKeySalt;
+    const storedWrappedKey = encryptForDb(wrappedKeyBuffer);
+    const storedWrappedKeySalt = encryptForDb(wrappedKeySaltBuffer);
 
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       INSERT INTO recipients (
         id,
         file_id,
@@ -608,198 +593,187 @@ export async function createRecipientRecord(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
-      id,
-      fileId,
-      email,
-      otpHash,
-      storedWrappedKey,
-      storedWrappedKeySalt,
-      otpVerifiedAt,
-      downloadedAt,
-      otpAttempts,
-      lastAttemptAt,
-      createdAt,
-    );
-  } else {
-    const record: RecipientRecord = {
-      id,
-      file_id: fileId,
-      email,
-      otp_hash: otpHash,
-      wrapped_key: storedWrappedKey,
-      wrapped_key_salt: storedWrappedKeySalt,
-      otp_verified_at: otpVerifiedAt,
-      downloaded_at: downloadedAt,
-      otp_attempts: otpAttempts,
-      last_attempt_at: lastAttemptAt,
-      created_at: createdAt,
-    };
-    recipients.set(id, record);
-  }
+        stmt.run(
+            id,
+            fileId,
+            email,
+            otpHash,
+            storedWrappedKey,
+            storedWrappedKeySalt,
+            otpVerifiedAt,
+            downloadedAt,
+            otpAttempts,
+            lastAttemptAt,
+            createdAt,
+        );
+    } else {
+        const record: RecipientRecord = {
+            id,
+            file_id: fileId,
+            email,
+            otp_hash: otpHash,
+            wrapped_key: storedWrappedKey,
+            wrapped_key_salt: storedWrappedKeySalt,
+            otp_verified_at: otpVerifiedAt,
+            downloaded_at: downloadedAt,
+            otp_attempts: otpAttempts,
+            last_attempt_at: lastAttemptAt,
+            created_at: createdAt,
+        };
+        recipients.set(id, record);
+    }
 
-  return id;
+    return id;
 }
 
 function decryptRecipientRecord(raw: RecipientRecord): RecipientRecord {
-  return {
-    ...raw,
-    wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
-    wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
-  };
+    return {
+        ...raw,
+        wrapped_key: decryptFromDb(toBuffer(raw.wrapped_key)),
+        wrapped_key_salt: decryptFromDb(toBuffer(raw.wrapped_key_salt)),
+    };
 }
 
 /**
  * Get all recipients for a file
  */
-export async function getRecipientsByFileId(
-  fileId: string,
-): Promise<RecipientRecord[]> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(
-      "SELECT * FROM recipients WHERE file_id = ? ORDER BY created_at ASC",
-    );
-    const rows = stmt.all(fileId) as RecipientRecord[];
-    return rows.map(decryptRecipientRecord);
-  } else {
-    return Array.from(recipients.values())
-      .filter((r) => r.file_id === fileId)
-      .map(decryptRecipientRecord);
-  }
+export async function getRecipientsByFileId(fileId: string): Promise<RecipientRecord[]> {
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(
+            'SELECT * FROM recipients WHERE file_id = ? ORDER BY created_at ASC',
+        );
+        const rows = stmt.all(fileId) as RecipientRecord[];
+        return rows.map(decryptRecipientRecord);
+    } else {
+        return Array.from(recipients.values())
+            .filter((r) => r.file_id === fileId)
+            .map(decryptRecipientRecord);
+    }
 }
 
 /**
  * Get recipient by fileId and email
  */
 export async function getRecipientByFileAndEmail(
-  fileId: string,
-  email: string,
+    fileId: string,
+    email: string,
 ): Promise<RecipientRecord | null> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(
-      "SELECT * FROM recipients WHERE file_id = ? AND email = ?",
-    );
-    const result = stmt.get(fileId, email) as RecipientRecord | undefined;
-    return result ? decryptRecipientRecord(result) : null;
-  } else {
-    const raw = Array.from(recipients.values()).find(
-      (r) => r.file_id === fileId && r.email === email,
-    );
-    return raw ? decryptRecipientRecord(raw) : null;
-  }
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare('SELECT * FROM recipients WHERE file_id = ? AND email = ?');
+        const result = stmt.get(fileId, email) as RecipientRecord | undefined;
+        return result ? decryptRecipientRecord(result) : null;
+    } else {
+        const raw = Array.from(recipients.values()).find(
+            (r) => r.file_id === fileId && r.email === email,
+        );
+        return raw ? decryptRecipientRecord(raw) : null;
+    }
 }
 
 /**
  * Update recipient record
  */
 export async function updateRecipientRecord(
-  recipientId: string,
-  updates: Partial<RecipientRecord>,
+    recipientId: string,
+    updates: Partial<RecipientRecord>,
 ): Promise<void> {
-  if (USE_SQLITE && db) {
-    const fields = Object.keys(updates)
-      .map((key) => `${key} = ?`)
-      .join(", ");
-    const values = Object.values(updates);
-    const stmt = db.prepare(`UPDATE recipients SET ${fields} WHERE id = ?`);
-    stmt.run(...values, recipientId);
-  } else {
-    const recipient = recipients.get(recipientId);
-    if (!recipient) return;
-    Object.assign(recipient, updates);
-    recipients.set(recipientId, recipient);
-  }
+    if (USE_SQLITE && db) {
+        const fields = Object.keys(updates)
+            .map((key) => `${key} = ?`)
+            .join(', ');
+        const values = Object.values(updates);
+        const stmt = db.prepare(`UPDATE recipients SET ${fields} WHERE id = ?`);
+        stmt.run(...values, recipientId);
+    } else {
+        const recipient = recipients.get(recipientId);
+        if (!recipient) return;
+        Object.assign(recipient, updates);
+        recipients.set(recipientId, recipient);
+    }
 }
 
 /**
  * Delete recipient (used for access revocation)
  */
-export async function deleteRecipient(
-  fileId: string,
-  recipientId: string,
-): Promise<void> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(
-      "DELETE FROM recipients WHERE id = ? AND file_id = ?",
-    );
-    stmt.run(recipientId, fileId);
-  } else {
-    const recipient = recipients.get(recipientId);
-    if (!recipient || recipient.file_id !== fileId) return;
-    recipients.delete(recipientId);
-  }
+export async function deleteRecipient(fileId: string, recipientId: string): Promise<void> {
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare('DELETE FROM recipients WHERE id = ? AND file_id = ?');
+        stmt.run(recipientId, fileId);
+    } else {
+        const recipient = recipients.get(recipientId);
+        if (!recipient || recipient.file_id !== fileId) return;
+        recipients.delete(recipientId);
+    }
 }
 
 /**
  * Increment recipient OTP attempts counter
  */
-export async function incrementRecipientOTPAttempts(
-  recipientId: string,
-): Promise<void> {
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+export async function incrementRecipientOTPAttempts(recipientId: string): Promise<void> {
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       UPDATE recipients 
       SET otp_attempts = otp_attempts + 1, last_attempt_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `);
-    stmt.run(recipientId);
-  } else {
-    const recipient = recipients.get(recipientId);
-    if (!recipient) return;
-    recipient.otp_attempts = (recipient.otp_attempts || 0) + 1;
-    recipient.last_attempt_at = new Date().toISOString();
-    recipients.set(recipientId, recipient);
-  }
+        stmt.run(recipientId);
+    } else {
+        const recipient = recipients.get(recipientId);
+        if (!recipient) return;
+        recipient.otp_attempts = (recipient.otp_attempts || 0) + 1;
+        recipient.last_attempt_at = new Date().toISOString();
+        recipients.set(recipientId, recipient);
+    }
 }
 
 /**
  * Log audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logAuditEvent(
-  fileId: string,
-  eventType: string,
-  ipAddress: string | null,
-  userAgent: string | null,
-  details: Record<string, unknown> = {},
+    fileId: string,
+    eventType: string,
+    ipAddress: string | null,
+    userAgent: string | null,
+    details: Record<string, unknown> = {},
 ): Promise<void> {
-  if (!loggingConfig.auditEnabled) return;
+    if (!loggingConfig.auditEnabled) return;
 
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       INSERT INTO audit_logs (file_id, event_type, ip_address, user_agent, details)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(fileId, eventType, ipAddress, userAgent, JSON.stringify(details));
-  } else {
-    const logEntry = {
-      id: Date.now() + Math.random(),
-      file_id: fileId,
-      event_type: eventType,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      details: JSON.stringify(details),
-      created_at: new Date().toISOString(),
-    };
+        stmt.run(fileId, eventType, ipAddress, userAgent, JSON.stringify(details));
+    } else {
+        const logEntry = {
+            id: Date.now() + Math.random(),
+            file_id: fileId,
+            event_type: eventType,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            details: JSON.stringify(details),
+            created_at: new Date().toISOString(),
+        };
 
-    auditLogs.push(logEntry);
-  }
+        auditLogs.push(logEntry);
+    }
 }
 
 /**
  * Log recipient audit event (no-op when config.logging.auditEnabled is false)
  */
 export async function logRecipientAuditEvent(
-  fileId: string,
-  recipientId: string,
-  eventType: string,
-  ipAddress: string | null,
-  userAgent: string | null,
-  details: Record<string, unknown> = {},
+    fileId: string,
+    recipientId: string,
+    eventType: string,
+    ipAddress: string | null,
+    userAgent: string | null,
+    details: Record<string, unknown> = {},
 ): Promise<void> {
-  if (!loggingConfig.auditEnabled) return;
+    if (!loggingConfig.auditEnabled) return;
 
-  if (USE_SQLITE && db) {
-    const stmt = db.prepare(`
+    if (USE_SQLITE && db) {
+        const stmt = db.prepare(`
       INSERT INTO recipient_audit_logs (
         id,
         file_id,
@@ -811,36 +785,36 @@ export async function logRecipientAuditEvent(
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
-      crypto.randomUUID(),
-      fileId,
-      recipientId,
-      eventType,
-      ipAddress,
-      userAgent,
-      JSON.stringify(details),
-    );
-  } else {
-    const logEntry = {
-      id: crypto.randomUUID(),
-      file_id: fileId,
-      recipient_id: recipientId,
-      event_type: eventType,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      details: JSON.stringify(details),
-      created_at: new Date().toISOString(),
-    };
+        stmt.run(
+            crypto.randomUUID(),
+            fileId,
+            recipientId,
+            eventType,
+            ipAddress,
+            userAgent,
+            JSON.stringify(details),
+        );
+    } else {
+        const logEntry = {
+            id: crypto.randomUUID(),
+            file_id: fileId,
+            recipient_id: recipientId,
+            event_type: eventType,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            details: JSON.stringify(details),
+            created_at: new Date().toISOString(),
+        };
 
-    recipientAuditLogs.push(logEntry);
-  }
+        recipientAuditLogs.push(logEntry);
+    }
 }
 
 /**
  * Close database connection
  */
 export function closeDatabase(): void {
-  if (USE_SQLITE && db) {
-    db.close();
-  }
+    if (USE_SQLITE && db) {
+        db.close();
+    }
 }

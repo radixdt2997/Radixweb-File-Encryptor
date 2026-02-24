@@ -5,14 +5,10 @@
  * Uses separate email channels for enhanced security.
  */
 
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
-import { email as emailConfig, emailMock } from "../config";
-import type {
-  EmailSendResult,
-  DownloadLinkEmailData,
-  OTPEmailData,
-} from "../types/services";
+import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
+import { email as emailConfig, emailMock } from '../config';
+import type { EmailSendResult, DownloadLinkEmailData, OTPEmailData } from '../types/services';
 
 // ============================================================================
 // EMAIL CONFIGURATION
@@ -23,80 +19,75 @@ let transporter: Transporter | null = null;
 /**
  * Mock email sender for development
  */
-async function mockSendMail(
-  mailOptions: nodemailer.SendMailOptions,
-): Promise<EmailSendResult> {
-  console.log("📧 [MOCK EMAIL] - Would send email:");
-  console.log("   To:", mailOptions.to);
-  console.log("   Subject:", mailOptions.subject);
-  console.log("   From:", mailOptions.from);
-  console.log(
-    "   Body preview:",
-    (mailOptions.text as string)?.substring(0, 100) + "...",
-  );
+async function mockSendMail(mailOptions: nodemailer.SendMailOptions): Promise<EmailSendResult> {
+    console.log('📧 [MOCK EMAIL] - Would send email:');
+    console.log('   To:', mailOptions.to);
+    console.log('   Subject:', mailOptions.subject);
+    console.log('   From:', mailOptions.from);
+    console.log('   Body preview:', (mailOptions.text as string)?.substring(0, 100) + '...');
 
-  return {
-    messageId: `mock-${Date.now()}`,
-    mock: true,
-  };
+    return {
+        messageId: `mock-${Date.now()}`,
+        mock: true,
+    };
 }
 
 export async function initEmailService(): Promise<boolean> {
-  // Use mock email if explicitly enabled in config
-  const useMockEmail = emailMock.enabled;
+    // Use mock email if explicitly enabled in config
+    const useMockEmail = emailMock.enabled;
 
-  if (useMockEmail) {
-    console.log("📧 Using mock email service (development mode)");
-    console.log(
-      "💡 Set USE_MOCK_EMAIL=false and configure real email credentials for production",
-    );
-    transporter = {
-      sendMail: mockSendMail,
-      verify: () => Promise.resolve(true),
-    } as unknown as Transporter;
-    return true;
-  }
+    if (useMockEmail) {
+        console.log('📧 Using mock email service (development mode)');
+        console.log(
+            '💡 Set USE_MOCK_EMAIL=false and configure real email credentials for production',
+        );
+        transporter = {
+            sendMail: mockSendMail,
+            verify: () => Promise.resolve(true),
+        } as unknown as Transporter;
+        return true;
+    }
 
-  // Check if email is configured (from config module)
-  if (!emailConfig.user || !emailConfig.pass) {
-    throw new Error(
-      "Email service not configured. Set EMAIL_USER and EMAIL_PASS environment variables.",
-    );
-  }
+    // Check if email is configured (from config module)
+    if (!emailConfig.user || !emailConfig.pass) {
+        throw new Error(
+            'Email service not configured. Set EMAIL_USER and EMAIL_PASS environment variables.',
+        );
+    }
 
-  // Create transporter from config
-  transporter = nodemailer.createTransport({
-    service: emailConfig.service,
-    host: emailConfig.host,
-    port: emailConfig.port,
-    secure: emailConfig.secure,
-    auth: {
-      user: emailConfig.user,
-      pass: emailConfig.pass,
-    },
-    // Additional security options
-    tls: {
-      rejectUnauthorized: false, // For development only
-    },
-  });
+    // Create transporter from config
+    transporter = nodemailer.createTransport({
+        service: emailConfig.service,
+        host: emailConfig.host,
+        port: emailConfig.port,
+        secure: emailConfig.secure,
+        auth: {
+            user: emailConfig.user,
+            pass: emailConfig.pass,
+        },
+        // Additional security options
+        tls: {
+            rejectUnauthorized: false, // For development only
+        },
+    });
 
-  // Verify connection
-  try {
-    await transporter.verify();
-    console.log("✅ Email service connected");
-    return true;
-  } catch (error) {
-    const err = error as Error;
-    console.error("❌ Email service verification failed:", err.message);
-    throw error;
-  }
+    // Verify connection
+    try {
+        await transporter.verify();
+        console.log('✅ Email service connected');
+        return true;
+    } catch (error) {
+        const err = error as Error;
+        console.error('❌ Email service verification failed:', err.message);
+        throw error;
+    }
 }
 
 /**
  * Check if email service is configured
  */
 function isEmailConfigured(): boolean {
-  return transporter !== null;
+    return transporter !== null;
 }
 
 // ============================================================================
@@ -107,20 +98,20 @@ function isEmailConfigured(): boolean {
  * Send download link email (Channel 1)
  */
 export async function sendDownloadLinkEmail(
-  recipientEmail: string,
-  data: DownloadLinkEmailData,
+    recipientEmail: string,
+    data: DownloadLinkEmailData,
 ): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
-    throw new Error("Email service not initialized");
-  }
+    if (!isEmailConfigured()) {
+        throw new Error('Email service not initialized');
+    }
 
-  const { fileName, fileSize, downloadUrl, expiryMinutes } = data;
+    const { fileName, fileSize, downloadUrl, expiryMinutes } = data;
 
-  const mailOptions: nodemailer.SendMailOptions = {
-    from: emailConfig.from,
-    to: recipientEmail,
-    subject: `Secure file shared with you - ${fileName}`,
-    html: `
+    const mailOptions: nodemailer.SendMailOptions = {
+        from: emailConfig.from,
+        to: recipientEmail,
+        subject: `Secure file shared with you - ${fileName}`,
+        html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -167,7 +158,7 @@ export async function sendDownloadLinkEmail(
 </body>
 </html>
     `,
-    text: `
+        text: `
 Secure File Delivery
 
 Someone has shared an encrypted file with you.
@@ -188,42 +179,40 @@ Security Notice: This file is encrypted end-to-end. Your password is never sent 
 Radixweb Secure File Encryptor
 All encryption happens in your browser. Zero-knowledge security.
     `,
-  };
-
-  try {
-    const result = await transporter!.sendMail(mailOptions);
-    console.log(
-      `📧 Download link email sent to ${recipientEmail}: ${result.messageId}`,
-    );
-    return {
-      messageId: result.messageId,
     };
-  } catch (error) {
-    console.error("Failed to send download link email:", error);
-    throw error;
-  }
+
+    try {
+        const result = await transporter!.sendMail(mailOptions);
+        console.log(`📧 Download link email sent to ${recipientEmail}: ${result.messageId}`);
+        return {
+            messageId: result.messageId,
+        };
+    } catch (error) {
+        console.error('Failed to send download link email:', error);
+        throw error;
+    }
 }
 
 /**
  * Send OTP email (Channel 2 - Separate for Security)
  */
 export async function sendOTPEmail(
-  recipientEmail: string,
-  data: OTPEmailData,
+    recipientEmail: string,
+    data: OTPEmailData,
 ): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
-    throw new Error("Email service not initialized");
-  }
+    if (!isEmailConfigured()) {
+        throw new Error('Email service not initialized');
+    }
 
-  const { fileName, expiryMinutes, otp } = data;
+    const { fileName, expiryMinutes, otp } = data;
 
-  console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
+    console.log(`🔐 Sending OTP ${otp} to ${recipientEmail}`);
 
-  const mailOptions: nodemailer.SendMailOptions = {
-    from: emailConfig.from,
-    to: recipientEmail,
-    subject: "Your one-time password for secure file delivery",
-    html: `
+    const mailOptions: nodemailer.SendMailOptions = {
+        from: emailConfig.from,
+        to: recipientEmail,
+        subject: 'Your one-time password for secure file delivery',
+        html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -277,7 +266,7 @@ export async function sendOTPEmail(
 </body>
 </html>
     `,
-    text: `
+        text: `
 YOUR ONE-TIME PASSWORD: ${otp}
 
 CRITICAL SECURITY INFORMATION:
@@ -298,18 +287,18 @@ Next Steps:
 Radixweb Secure File Encryptor
 If you did not expect this email, please ignore it.
     `,
-  };
-
-  try {
-    const result = await transporter!.sendMail(mailOptions);
-    console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
-    return {
-      messageId: result.messageId,
     };
-  } catch (error) {
-    console.error("Failed to send OTP email:", error);
-    throw error;
-  }
+
+    try {
+        const result = await transporter!.sendMail(mailOptions);
+        console.log(`🔐 OTP email sent to ${recipientEmail}: ${result.messageId}`);
+        return {
+            messageId: result.messageId,
+        };
+    } catch (error) {
+        console.error('Failed to send OTP email:', error);
+        throw error;
+    }
 }
 
 // ============================================================================
@@ -319,29 +308,27 @@ If you did not expect this email, please ignore it.
 /**
  * Send test email for configuration verification
  */
-export async function sendTestEmail(
-  recipientEmail: string,
-): Promise<EmailSendResult> {
-  if (!isEmailConfigured()) {
-    throw new Error("Email service not initialized");
-  }
+export async function sendTestEmail(recipientEmail: string): Promise<EmailSendResult> {
+    if (!isEmailConfigured()) {
+        throw new Error('Email service not initialized');
+    }
 
-  const mailOptions: nodemailer.SendMailOptions = {
-    from: emailConfig.from,
-    to: recipientEmail,
-    subject: "Secure File Server - Test Email",
-    text: "This is a test email from your Secure File Server. Email service is working correctly!",
-    html: "<h1>Test Email</h1><p>This is a test email from your Secure File Server. Email service is working correctly!</p>",
-  };
-
-  try {
-    const result = await transporter!.sendMail(mailOptions);
-    console.log(`🧪 Test email sent to ${recipientEmail}: ${result.messageId}`);
-    return {
-      messageId: result.messageId,
+    const mailOptions: nodemailer.SendMailOptions = {
+        from: emailConfig.from,
+        to: recipientEmail,
+        subject: 'Secure File Server - Test Email',
+        text: 'This is a test email from your Secure File Server. Email service is working correctly!',
+        html: '<h1>Test Email</h1><p>This is a test email from your Secure File Server. Email service is working correctly!</p>',
     };
-  } catch (error) {
-    console.error("Failed to send test email:", error);
-    throw error;
-  }
+
+    try {
+        const result = await transporter!.sendMail(mailOptions);
+        console.log(`🧪 Test email sent to ${recipientEmail}: ${result.messageId}`);
+        return {
+            messageId: result.messageId,
+        };
+    } catch (error) {
+        console.error('Failed to send test email:', error);
+        throw error;
+    }
 }
