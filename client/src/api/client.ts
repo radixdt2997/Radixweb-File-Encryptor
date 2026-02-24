@@ -20,16 +20,13 @@ export interface MeResponse {
 }
 
 /** Parse standard API error response and return user-facing message. */
-async function getErrorMessage(
-  response: Response,
-  fallback: string,
-): Promise<string> {
-  try {
-    const body = (await response.json()) as ApiErrorResponse;
-    return body.message ?? body.error ?? fallback;
-  } catch {
-    return fallback;
-  }
+async function getErrorMessage(response: Response, fallback: string): Promise<string> {
+    try {
+        const body = (await response.json()) as ApiErrorResponse;
+        return body.message ?? body.error ?? fallback;
+    } catch {
+        return fallback;
+    }
 }
 
 function authHeaders(token: string | null): HeadersInit {
@@ -126,47 +123,47 @@ export const api = {
     return response.json();
   },
 
-  async getFileMetadata(fileId: string): Promise<FileMetadata> {
-    const response = await fetch(`${API_BASE}/metadata/${fileId}`, {
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const message = await getErrorMessage(response, "File not found");
-      throw new Error(message);
-    }
-    return response.json();
-  },
+    async getFileMetadata(fileId: string): Promise<FileMetadata> {
+        const response = await fetch(`${API_BASE}/metadata/${fileId}`, {
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            const message = await getErrorMessage(response, 'File not found');
+            throw new Error(message);
+        }
+        return response.json();
+    },
 
-  async verifyOTP(
-    fileId: string,
-    otp: string,
-    recipientEmail?: string,
-  ): Promise<VerifyOTPResult> {
-    const response = await fetch(`${API_BASE}/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        recipientEmail ? { fileId, otp, recipientEmail } : { fileId, otp },
-      ),
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const message = await getErrorMessage(response, "OTP verification failed");
-      throw new Error(message);
-    }
-    return response.json();
-  },
+    async verifyOTP(
+        fileId: string,
+        otp: string,
+        recipientEmail?: string,
+    ): Promise<VerifyOTPResult> {
+        const response = await fetch(`${API_BASE}/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+                recipientEmail ? { fileId, otp, recipientEmail } : { fileId, otp },
+            ),
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            const message = await getErrorMessage(response, 'OTP verification failed');
+            throw new Error(message);
+        }
+        return response.json();
+    },
 
-  async downloadFile(fileId: string): Promise<ArrayBuffer> {
-    const response = await fetch(`${API_BASE}/download/${fileId}`, {
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const message = await getErrorMessage(response, "Download failed");
-      throw new Error(message);
-    }
-    return response.arrayBuffer();
-  },
+    async downloadFile(fileId: string): Promise<ArrayBuffer> {
+        const response = await fetch(`${API_BASE}/download/${fileId}`, {
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            const message = await getErrorMessage(response, 'Download failed');
+            throw new Error(message);
+        }
+        return response.arrayBuffer();
+    },
 
   async getRecipients(fileId: string, token: string | null): Promise<RecipientInfo[]> {
     const response = await fetch(`${API_BASE}/files/${fileId}/recipients`, {

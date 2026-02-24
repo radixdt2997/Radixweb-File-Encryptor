@@ -10,10 +10,10 @@
  * Alternative: Leave legacy files as-is until retention deletes them; only new uploads will be encrypted.
  */
 
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-import { database, encryption, storage } from "../src/config";
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { database, encryption, storage } from '../src/config';
 import {
   encryptFilePayload,
   decryptFilePayload,
@@ -124,6 +124,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+    console.error(err);
+    process.exit(1);
 });

@@ -1,6 +1,6 @@
 /**
  * Configuration Types
- * 
+ *
  * Type definitions for all configuration interfaces.
  */
 
@@ -8,13 +8,13 @@
  * Server configuration
  */
 export interface ServerConfig {
-  nodeEnv: "development" | "production" | "test";
-  port: number;
-  host: string;
-  baseUrl: string;
-  downloadPageBaseUrl: string;
-  /** Enable Swagger UI at /api-docs. Default: true in dev, false in production unless SWAGGER_ENABLED=true */
-  docsEnabled: boolean;
+    nodeEnv: 'development' | 'production' | 'test';
+    port: number;
+    host: string;
+    baseUrl: string;
+    downloadPageBaseUrl: string;
+    /** Enable Swagger UI at /api-docs. Default: true in dev, false in production unless SWAGGER_ENABLED=true */
+    docsEnabled: boolean;
 }
 
 /**
@@ -29,52 +29,52 @@ export interface DatabaseConfig {
  * File storage configuration
  */
 export interface StorageConfig {
-  path: string;
-  maxFileSize: number;
-  retentionDays: number;
+    path: string;
+    maxFileSize: number;
+    retentionDays: number;
 }
 
 /**
  * Encryption at rest configuration
  */
 export interface EncryptionConfig {
-  /** Master key (KEK) for deriving file and DB DEKs. 32 bytes (64 hex or 44 base64). */
-  masterKey: Buffer | null;
-  /** Enable server-side encryption at rest for files and DB. Default false for safe rollout. */
-  enabled: boolean;
+    /** Master key (KEK) for deriving file and DB DEKs. 32 bytes (64 hex or 44 base64). */
+    masterKey: Buffer | null;
+    /** Enable server-side encryption at rest for files and DB. Default false for safe rollout. */
+    enabled: boolean;
 }
 
 /**
  * Email service configuration
  */
 export interface EmailConfig {
-  service: string;
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  pass: string;
-  from: string;
+    service: string;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    from: string;
 }
 
 /**
  * Security configuration
  */
 export interface SecurityConfig {
-  corsOrigin: string;
-  rateLimitWindowMs: number;
-  rateLimitMaxRequests: number;
-  otpMaxAttempts: number;
-  otpCooldownMs: number;
-  /** Upload rate limit: window (ms) and max requests per window */
-  uploadLimitWindowMs: number;
-  uploadLimitMaxRequests: number;
-  /** File access (metadata, download) rate limit */
-  fileAccessLimitWindowMs: number;
-  fileAccessLimitMaxRequests: number;
-  /** Recipient list access rate limit */
-  recipientAccessLimitWindowMs: number;
-  recipientAccessLimitMaxRequests: number;
+    corsOrigin: string;
+    rateLimitWindowMs: number;
+    rateLimitMaxRequests: number;
+    otpMaxAttempts: number;
+    otpCooldownMs: number;
+    /** Upload rate limit: window (ms) and max requests per window */
+    uploadLimitWindowMs: number;
+    uploadLimitMaxRequests: number;
+    /** File access (metadata, download) rate limit */
+    fileAccessLimitWindowMs: number;
+    fileAccessLimitMaxRequests: number;
+    /** Recipient list access rate limit */
+    recipientAccessLimitWindowMs: number;
+    recipientAccessLimitMaxRequests: number;
 }
 
 /**
@@ -95,15 +95,15 @@ export interface AuthConfig {
  * Email mock configuration
  */
 export interface EmailMockConfig {
-  enabled: boolean;
+    enabled: boolean;
 }
 
 /**
  * Logging configuration
  */
 export interface LoggingConfig {
-  level: string;
-  auditEnabled: boolean;
+    level: string;
+    auditEnabled: boolean;
 }
 
 /**

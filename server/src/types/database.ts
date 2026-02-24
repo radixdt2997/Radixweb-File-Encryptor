@@ -72,44 +72,44 @@ export interface FileRecord {
  * Recipient record structure (matches PostgreSQL schema)
  */
 export interface RecipientRecord {
-  id: string;
-  file_id: string;
-  email: string;
-  otp_hash: string;
-  wrapped_key: Buffer | string;
-  wrapped_key_salt: Buffer | string;
-  otp_verified_at: string | null;
-  downloaded_at: string | null;
-  otp_attempts: number;
-  last_attempt_at: string | null;
-  created_at: string;
+    id: string;
+    file_id: string;
+    email: string;
+    otp_hash: string;
+    wrapped_key: Buffer | string;
+    wrapped_key_salt: Buffer | string;
+    otp_verified_at: string | null;
+    downloaded_at: string | null;
+    otp_attempts: number;
+    last_attempt_at: string | null;
+    created_at: string;
 }
 
 /**
  * Audit log record structure
  */
 export interface AuditLogRecord {
-  id?: number;
-  file_id: string;
-  event_type: string;
-  ip_address: string | null;
-  user_agent: string | null;
-  details: string; // JSON string
-  created_at: string;
+    id?: number;
+    file_id: string;
+    event_type: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string; // JSON string
+    created_at: string;
 }
 
 /**
  * Recipient audit log record structure
  */
 export interface RecipientAuditLogRecord {
-  id: string;
-  file_id: string;
-  recipient_id: string;
-  event_type: string;
-  ip_address: string | null;
-  user_agent: string | null;
-  details: string; // JSON string
-  created_at: string;
+    id: string;
+    file_id: string;
+    recipient_id: string;
+    event_type: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string; // JSON string
+    created_at: string;
 }
 
 /**
@@ -134,25 +134,25 @@ export interface CreateFileData {
  * Input data for creating a recipient record
  */
 export interface CreateRecipientData {
-  id?: string;
-  fileId: string;
-  email: string;
-  otpHash: string;
-  wrappedKey: string | Buffer;
-  wrappedKeySalt: string | Buffer;
-  otpVerifiedAt?: string | null;
-  downloadedAt?: string | null;
-  otpAttempts?: number;
-  lastAttemptAt?: string | null;
+    id?: string;
+    fileId: string;
+    email: string;
+    otpHash: string;
+    wrappedKey: string | Buffer;
+    wrappedKeySalt: string | Buffer;
+    otpVerifiedAt?: string | null;
+    downloadedAt?: string | null;
+    otpAttempts?: number;
+    lastAttemptAt?: string | null;
 }
 
 /**
  * Additional data for updating file status
  */
 export interface UpdateFileStatusData {
-  downloadedAt?: string;
-  otpAttempts?: number;
-  lastAttemptAt?: string;
+    downloadedAt?: string;
+    otpAttempts?: number;
+    lastAttemptAt?: string;
 }
 
 // DatabaseStats is exported from api.ts to avoid duplication
@@ -161,7 +161,7 @@ export interface UpdateFileStatusData {
  * Health check response
  */
 export interface DatabaseHealthCheck {
-  status: "healthy" | "unhealthy";
-  database: "connected" | "disconnected";
-  error?: string;
+    status: 'healthy' | 'unhealthy';
+    database: 'connected' | 'disconnected';
+    error?: string;
 }

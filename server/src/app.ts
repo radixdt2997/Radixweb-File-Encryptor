@@ -5,26 +5,20 @@
  * Server never sees plaintext files or OTPs.
  */
 
-import cors from "cors";
+import cors from 'cors';
 import express, {
-  type Express,
-  type Request,
-  type Response,
-  type ErrorRequestHandler,
-} from "express";
-import rateLimit from "express-rate-limit";
-import helmet from "helmet";
-import multer from "multer";
+    type Express,
+    type Request,
+    type Response,
+    type ErrorRequestHandler,
+} from 'express';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import multer from 'multer';
 
-import {
-  getConfigSummary,
-  security,
-  server,
-  storage,
-  validateConfiguration,
-} from "./config";
-import { getOpenApiSpec } from "./openapi";
-import swaggerUi from "swagger-ui-express";
+import { getConfigSummary, security, server, storage, validateConfiguration } from './config';
+import { getOpenApiSpec } from './openapi';
+import swaggerUi from 'swagger-ui-express';
 
 // Routes
 import authRoutes from "./routes/auth";
@@ -41,18 +35,18 @@ import transactionsRoutes from "./routes/transactions";
 import { requireAuth } from "./middleware/auth";
 
 // Services
-import { sendError } from "./lib/errorResponse";
-import { closeDatabase, initDatabase } from "./services/database";
-import { initEmailService } from "./services/email";
-import { ensureDirectories } from "./services/file-storage";
+import { sendError } from './lib/errorResponse';
+import { closeDatabase, initDatabase } from './services/database';
+import { initEmailService } from './services/email';
+import { ensureDirectories } from './services/file-storage';
 
 // Configuration from config module
 const PORT = server.port;
 const HOST = server.host;
 const NODE_ENV = server.nodeEnv;
-const corsOrigins = security.corsOrigin.includes(",")
-  ? security.corsOrigin.split(",").map((o) => o.trim())
-  : [security.corsOrigin];
+const corsOrigins = security.corsOrigin.includes(',')
+    ? security.corsOrigin.split(',').map((o) => o.trim())
+    : [security.corsOrigin];
 
 // Initialize Express app
 const app: Express = express();
@@ -63,31 +57,31 @@ const app: Express = express();
 
 // Helmet for security headers
 app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
-      },
-    },
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true,
-    },
-  }),
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                scriptSrc: ["'self'"],
+                imgSrc: ["'self'", 'data:', 'https:'],
+            },
+        },
+        hsts: {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+        },
+    }),
 );
 
 // CORS configuration (from config)
 app.use(
-  cors({
-    origin: corsOrigins,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }),
+    cors({
+        origin: corsOrigins,
+        methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        credentials: true,
+    }),
 );
 
 // Rate limiting (from config) — disabled in development
@@ -107,7 +101,7 @@ const limiter =
         legacyHeaders: false,
       });
 
-app.use("/api/", limiter);
+app.use('/api/', limiter);
 
 const strictLimiter =
   NODE_ENV === "development"
@@ -121,7 +115,7 @@ const strictLimiter =
         },
       });
 
-app.use("/api/verify-otp", strictLimiter);
+app.use('/api/verify-otp', strictLimiter);
 
 const uploadLimiter =
   NODE_ENV === "development"
@@ -172,14 +166,14 @@ const recipientAccessLimiter =
 // ============================================================================
 
 // Body parsing
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging
 app.use((req: Request, _res: Response, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
-  next();
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
+    next();
 });
 
 // ============================================================================
@@ -189,20 +183,18 @@ app.use((req: Request, _res: Response, next) => {
 const maxFileSize = storage.maxFileSize;
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: maxFileSize,
-  },
-  fileFilter: (_req, file, cb) => {
-    // Allow encrypted files and key data (all sent as blobs from client)
-    if (
-      ["encryptedData", "wrappedKey", "wrappedKeySalt"].includes(file.fieldname)
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Unexpected file field: ${file.fieldname}`));
-    }
-  },
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: maxFileSize,
+    },
+    fileFilter: (_req, file, cb) => {
+        // Allow encrypted files and key data (all sent as blobs from client)
+        if (['encryptedData', 'wrappedKey', 'wrappedKeySalt'].includes(file.fieldname)) {
+            cb(null, true);
+        } else {
+            cb(new Error(`Unexpected file field: ${file.fieldname}`));
+        }
+    },
 });
 
 // ============================================================================
@@ -210,19 +202,19 @@ const upload = multer({
 // ============================================================================
 
 if (server.docsEnabled) {
-  const openApiSpec = getOpenApiSpec(server.baseUrl);
-  app.use("/api-docs", swaggerUi.serve);
-  app.get(
-    "/api-docs",
-    swaggerUi.setup(openApiSpec, {
-      customSiteTitle: "Secure File Server API",
-      customCss: ".swagger-ui .topbar { display: none }",
-    }),
-  );
-  app.get("/api-docs.json", (_req: Request, res: Response) => {
-    res.setHeader("Content-Type", "application/json");
-    res.send(openApiSpec);
-  });
+    const openApiSpec = getOpenApiSpec(server.baseUrl);
+    app.use('/api-docs', swaggerUi.serve);
+    app.get(
+        '/api-docs',
+        swaggerUi.setup(openApiSpec, {
+            customSiteTitle: 'Secure File Server API',
+            customCss: '.swagger-ui .topbar { display: none }',
+        }),
+    );
+    app.get('/api-docs.json', (_req: Request, res: Response) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(openApiSpec);
+    });
 }
 
 // ============================================================================
@@ -230,13 +222,13 @@ if (server.docsEnabled) {
 // ============================================================================
 
 // Health check (no auth needed)
-app.use("/api/health", healthRoutes);
+app.use('/api/health', healthRoutes);
 
 // Auth (Phase 6)
 app.use("/api/auth", authRoutes);
 
 // Test email (development only)
-app.use("/api/test-email", testEmailRoutes);
+app.use('/api/test-email', testEmailRoutes);
 
 // File upload (Phase 6: auth required)
 app.use(
@@ -252,13 +244,13 @@ app.use(
 );
 
 // OTP verification
-app.use("/api/verify-otp", verifyRoutes);
+app.use('/api/verify-otp', verifyRoutes);
 
 // File download (with rate limiting)
-app.use("/api/download", fileAccessLimiter, downloadRoutes);
+app.use('/api/download', fileAccessLimiter, downloadRoutes);
 
 // File metadata (with rate limiting)
-app.use("/api/metadata", fileAccessLimiter, metadataRoutes);
+app.use('/api/metadata', fileAccessLimiter, metadataRoutes);
 
 // Recipient management (with stricter rate limiting on access)
 app.use("/api/files", recipientAccessLimiter, requireAuth, recipientsRoutes);
@@ -277,40 +269,35 @@ app.use(
 
 // 404 handler
 app.use((req: Request, res: Response) => {
-  sendError(
-    res,
-    404,
-    "Endpoint not found",
-    `Route ${req.method} ${req.path} does not exist`,
-  );
+    sendError(res, 404, 'Endpoint not found', `Route ${req.method} ${req.path} does not exist`);
 });
 
 // Global error handler
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  console.error("Error:", error);
+    console.error('Error:', error);
 
-  // Mongoose validation error
-  if (error.name === "ValidationError") {
-    return sendError(res, 400, "Validation Error", error.message);
-  }
+    // Mongoose validation error
+    if (error.name === 'ValidationError') {
+        return sendError(res, 400, 'Validation Error', error.message);
+    }
 
-  // Multer file size error
-  if (error.code === "LIMIT_FILE_SIZE") {
+    // Multer file size error
+    if (error.code === 'LIMIT_FILE_SIZE') {
+        return sendError(
+            res,
+            413,
+            'File too large',
+            `Maximum file size is ${maxFileSize / (1024 * 1024)}MB`,
+        );
+    }
+
+    // Default error response
     return sendError(
-      res,
-      413,
-      "File too large",
-      `Maximum file size is ${maxFileSize / (1024 * 1024)}MB`,
+        res,
+        (error as { status?: number }).status || 500,
+        'Internal Server Error',
+        NODE_ENV === 'development' ? error.message : 'Something went wrong',
     );
-  }
-
-  // Default error response
-  return sendError(
-    res,
-    (error as { status?: number }).status || 500,
-    "Internal Server Error",
-    NODE_ENV === "development" ? error.message : "Something went wrong",
-  );
 };
 
 app.use(errorHandler);
@@ -320,59 +307,53 @@ app.use(errorHandler);
 // ============================================================================
 
 async function startServer(): Promise<void> {
-  try {
-    console.log("🚀 Starting Secure File Server...");
-
-    validateConfiguration();
-    console.log("✅ Configuration validated");
-    console.log(
-      "📋 Config summary:",
-      JSON.stringify(getConfigSummary(), null, 2),
-    );
-
-    // Ensure required directories exist
-    await ensureDirectories();
-    console.log("✅ Directories initialized");
-
-    // Initialize database
-    await initDatabase();
-    console.log("✅ Database initialized");
-
-    // Initialize email service (optional - will log warning if not configured)
     try {
-      await initEmailService();
-      console.log("✅ Email service initialized");
-    } catch (emailError) {
-      console.warn(
-        "⚠️  Email service not configured:",
-        (emailError as Error).message,
-      );
-    }
+        console.log('🚀 Starting Secure File Server...');
 
-    // Start server
-    app.listen(PORT, HOST, () => {
-      console.log(`🌐 Server running at http://${HOST}:${PORT}`);
-      console.log(`📊 Environment: ${NODE_ENV}`);
-      console.log(`🔒 Max file size: ${maxFileSize / (1024 * 1024)}MB`);
-      console.log(`📧 Ready to receive file uploads and OTP verifications`);
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error);
-    process.exit(1);
-  }
+        validateConfiguration();
+        console.log('✅ Configuration validated');
+        console.log('📋 Config summary:', JSON.stringify(getConfigSummary(), null, 2));
+
+        // Ensure required directories exist
+        await ensureDirectories();
+        console.log('✅ Directories initialized');
+
+        // Initialize database
+        await initDatabase();
+        console.log('✅ Database initialized');
+
+        // Initialize email service (optional - will log warning if not configured)
+        try {
+            await initEmailService();
+            console.log('✅ Email service initialized');
+        } catch (emailError) {
+            console.warn('⚠️  Email service not configured:', (emailError as Error).message);
+        }
+
+        // Start server
+        app.listen(PORT, HOST, () => {
+            console.log(`🌐 Server running at http://${HOST}:${PORT}`);
+            console.log(`📊 Environment: ${NODE_ENV}`);
+            console.log(`🔒 Max file size: ${maxFileSize / (1024 * 1024)}MB`);
+            console.log(`📧 Ready to receive file uploads and OTP verifications`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
 }
 
 // Graceful shutdown
-process.on("SIGTERM", () => {
-  console.log("🛑 SIGTERM received, shutting down gracefully");
-  closeDatabase();
-  process.exit(0);
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    closeDatabase();
+    process.exit(0);
 });
 
-process.on("SIGINT", () => {
-  console.log("🛑 SIGINT received, shutting down gracefully");
-  closeDatabase();
-  process.exit(0);
+process.on('SIGINT', () => {
+    console.log('🛑 SIGINT received, shutting down gracefully');
+    closeDatabase();
+    process.exit(0);
 });
 
 // Start the server

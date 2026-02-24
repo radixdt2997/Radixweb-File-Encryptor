@@ -39,18 +39,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_ENCRYPTED_VERSION = 0x01;
 
 function encryptForDb(plain: Buffer): Buffer {
-  if (!encryptionConfig.enabled || !encryptionConfig.masterKey) return plain;
-  return Buffer.concat([
-    Buffer.from([DB_ENCRYPTED_VERSION]),
-    encryptDbField(plain),
-  ]);
+    if (!encryptionConfig.enabled || !encryptionConfig.masterKey) return plain;
+    return Buffer.concat([Buffer.from([DB_ENCRYPTED_VERSION]), encryptDbField(plain)]);
 }
 
 function decryptFromDb(stored: Buffer): Buffer {
-  if (stored.length > 0 && stored[0] === DB_ENCRYPTED_VERSION) {
-    return decryptDbField(stored.subarray(1));
-  }
-  return stored;
+    if (stored.length > 0 && stored[0] === DB_ENCRYPTED_VERSION) {
+        return decryptDbField(stored.subarray(1));
+    }
+    return stored;
 }
 
 let pool: Pool | null = null;
@@ -119,9 +116,7 @@ export async function createFileRecord(
     uploadedByUserId = null,
   } = data;
 
-  const expiryTime = new Date(
-    Date.now() + expiryMinutes * 60 * 1000,
-  ).toISOString();
+    const expiryTime = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
 
   const wrappedKeyBuf = Buffer.isBuffer(wrappedKey)
     ? wrappedKey
@@ -177,7 +172,7 @@ export async function getFileRecord(
 }
 
 export async function getFileById(fileId: string): Promise<FileRecord | null> {
-  return getFileRecord(fileId);
+    return getFileRecord(fileId);
 }
 
 /**
@@ -272,8 +267,8 @@ export async function incrementOTPAttempts(fileId: string): Promise<void> {
 }
 
 export async function updateFileRecord(
-  fileId: string,
-  updates: Partial<FileRecord>,
+    fileId: string,
+    updates: Partial<FileRecord>,
 ): Promise<void> {
   const keys = Object.keys(updates).filter(
     (k) => k !== "file_id" && updates[k as keyof FileRecord] !== undefined,
@@ -356,8 +351,8 @@ export async function getRecipientsByFileId(
 }
 
 export async function getRecipientByFileAndEmail(
-  fileId: string,
-  email: string,
+    fileId: string,
+    email: string,
 ): Promise<RecipientRecord | null> {
   const p = getPool();
   const result = await p.query(
@@ -374,8 +369,8 @@ export async function getRecipientByFileAndEmail(
 }
 
 export async function updateRecipientRecord(
-  recipientId: string,
-  updates: Partial<RecipientRecord>,
+    recipientId: string,
+    updates: Partial<RecipientRecord>,
 ): Promise<void> {
   const keys = Object.keys(updates).filter(
     (k) => k !== "id" && updates[k as keyof RecipientRecord] !== undefined,
@@ -413,11 +408,11 @@ export async function incrementRecipientOTPAttempts(
 }
 
 export async function logAuditEvent(
-  fileId: string,
-  eventType: string,
-  ipAddress: string | null,
-  userAgent: string | null,
-  details: Record<string, unknown> = {},
+    fileId: string,
+    eventType: string,
+    ipAddress: string | null,
+    userAgent: string | null,
+    details: Record<string, unknown> = {},
 ): Promise<void> {
   if (!loggingConfig.auditEnabled) return;
   const p = getPool();
@@ -429,12 +424,12 @@ export async function logAuditEvent(
 }
 
 export async function logRecipientAuditEvent(
-  fileId: string,
-  recipientId: string,
-  eventType: string,
-  ipAddress: string | null,
-  userAgent: string | null,
-  details: Record<string, unknown> = {},
+    fileId: string,
+    recipientId: string,
+    eventType: string,
+    ipAddress: string | null,
+    userAgent: string | null,
+    details: Record<string, unknown> = {},
 ): Promise<void> {
   if (!loggingConfig.auditEnabled) return;
   const p = getPool();
