@@ -21,6 +21,7 @@ import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { RequireAuth } from './RequireAuth';
 import { useAuthStore } from './stores/authStore';
+import { UserRole } from './types';
 import { cn } from './utils/tailwind';
 import { showMessage } from './utils/toast';
 
@@ -152,7 +153,7 @@ function Layout() {
                             <div className="flex items-center gap-3">
                                 <span className="text-sm text-gray-400">
                                     {user.email}
-                                    {user.role === 'admin' && (
+                                    {user.role === UserRole.Admin && (
                                         <span className="ml-2 text-cyan-400">Admin</span>
                                     )}
                                 </span>

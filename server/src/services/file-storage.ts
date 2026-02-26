@@ -31,11 +31,7 @@ const FILE_RETENTION_DAYS = storage.retentionDays;
  * Ensure all required directories exist
  */
 export async function ensureDirectories(): Promise<void> {
-    const dirs = [
-        STORAGE_PATH,
-        path.join(__dirname, '../../data'),
-        path.join(__dirname, '../../logs'),
-    ];
+    const dirs = [STORAGE_PATH, path.join(__dirname, '../../data')];
 
     for (const dir of dirs) {
         try {

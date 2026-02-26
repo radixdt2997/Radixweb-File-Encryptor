@@ -4,7 +4,12 @@
  * Type definitions for all API endpoints in the Secure File Server.
  */
 
-import type { DatabaseHealthCheck, ExpiryType, TransactionRole } from './database';
+import type {
+    DatabaseHealthCheck,
+    ExpiryType,
+    FileStatus,
+    TransactionRole,
+} from './database';
 import { StorageHealthCheck } from './services';
 
 /**
@@ -101,8 +106,11 @@ export interface TransactionItem {
     fileName: string;
     uploadedAt: string;
     expiryTime: string;
-    status: string;
+    expiryType: ExpiryType;
+    status: FileStatus;
     recipientCount: number;
+    recipientEmails: string[];
+    uploadedByEmail: string | null;
     role: TransactionRole;
 }
 

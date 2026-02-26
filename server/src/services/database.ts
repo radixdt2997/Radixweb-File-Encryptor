@@ -473,9 +473,33 @@ export interface TransactionRow {
     file_name: string;
     created_at: string;
     expiry_time: string;
-    status: string;
+    expiry_type: ExpiryType;
+    status: FileStatus;
     recipient_count: number;
+    recipient_emails: string[];
+    uploaded_by_email: string | null;
     role: TransactionRole;
+}
+
+function mapRowToTransactionRow(row: Record<string, unknown>, userId: string): TransactionRow {
+    const role =
+        row.uploaded_by_user_id === userId ? TransactionRole.Sender : TransactionRole.Recipient;
+    const recipientEmails = row.recipient_emails;
+    const emails: string[] = Array.isArray(recipientEmails)
+        ? (recipientEmails as string[]).filter((e): e is string => typeof e === 'string')
+        : [];
+    return {
+        file_id: String(row.file_id),
+        file_name: String(row.file_name),
+        created_at: String(row.created_at),
+        expiry_time: String(row.expiry_time),
+        expiry_type: (row.expiry_type as ExpiryType) ?? ExpiryType.TimeBased,
+        status: (row.status as FileStatus) ?? FileStatus.Active,
+        recipient_count: Number(row.recipient_count) || 0,
+        recipient_emails: emails,
+        uploaded_by_email: row.uploaded_by_email != null ? String(row.uploaded_by_email) : null,
+        role,
+    };
 }
 
 export async function getTransactions(
@@ -487,32 +511,54 @@ export async function getTransactions(
         limit: number;
         scope?: 'all';
         type?: 'sent' | 'received';
+        fileName?: string;
+        email?: string;
     },
 ): Promise<{ items: TransactionRow[]; total: number }> {
     const p = getPool();
-    const { page, limit, scope, type } = options;
+    const { page, limit, scope, type, fileName, email } = options;
     const offset = (page - 1) * limit;
 
+    const selectColumns = `f.file_id, f.file_name, f.created_at, f.expiry_time, f.expiry_type, f.status, f.uploaded_by_user_id,
+        (SELECT COUNT(*)::int FROM recipients r WHERE r.file_id = f.file_id) AS recipient_count,
+        (SELECT COALESCE(array_agg(r.email ORDER BY r.created_at), ARRAY[]::text[]) FROM recipients r WHERE r.file_id = f.file_id) AS recipient_emails,
+        u.email AS uploaded_by_email`;
+
     if (isAdmin && scope === 'all') {
-        const countResult = await p.query('SELECT COUNT(*)::int AS total FROM files');
-        const total = countResult.rows[0].total as number;
-        const result = await p.query(
-            `SELECT f.file_id, f.file_name, f.created_at, f.expiry_time, f.status,
-              (SELECT COUNT(*)::int FROM recipients r WHERE r.file_id = f.file_id) AS recipient_count
-       FROM files f
-       ORDER BY f.created_at DESC
-       LIMIT $1 OFFSET $2`,
-            [limit, offset],
+        const conditions: string[] = [];
+        const params: unknown[] = [];
+        let paramIndex = 1;
+        if (fileName && fileName.trim()) {
+            conditions.push(`f.file_name ILIKE $${paramIndex}`);
+            params.push(`%${fileName.trim()}%`);
+            paramIndex++;
+        }
+        if (email && email.trim()) {
+            conditions.push(`(u.email = $${paramIndex} OR EXISTS (SELECT 1 FROM recipients r WHERE r.file_id = f.file_id AND r.email = $${paramIndex}))`);
+            params.push(email.trim().toLowerCase());
+            paramIndex++;
+        }
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        const countResult = await p.query(
+            `SELECT COUNT(*)::int AS total FROM files f LEFT JOIN users u ON f.uploaded_by_user_id = u.id ${whereClause}`,
+            params,
         );
-        const items: TransactionRow[] = result.rows.map((row: Record<string, unknown>) => ({
-            file_id: String(row.file_id),
-            file_name: String(row.file_name),
-            created_at: String(row.created_at),
-            expiry_time: String(row.expiry_time),
-            status: String(row.status),
-            recipient_count: Number(row.recipient_count) || 0,
-            role: TransactionRole.Sender,
-        }));
+        const total = countResult.rows[0].total as number;
+        const limitParam = paramIndex;
+        const offsetParam = paramIndex + 1;
+        params.push(limit, offset);
+        const result = await p.query(
+            `SELECT ${selectColumns}
+       FROM files f
+       LEFT JOIN users u ON f.uploaded_by_user_id = u.id
+       ${whereClause}
+       ORDER BY f.created_at DESC
+       LIMIT $${limitParam} OFFSET $${offsetParam}`,
+            params,
+        );
+        const items: TransactionRow[] = result.rows.map((row: Record<string, unknown>) =>
+            mapRowToTransactionRow(row, userId),
+        );
         return { items, total };
     }
 
@@ -536,37 +582,42 @@ export async function getTransactions(
         params.push(userId, userEmail);
     }
 
+    let paramIndex = params.length + 1;
+    if (fileName && fileName.trim()) {
+        whereClause += ` AND f.file_name ILIKE $${paramIndex}`;
+        params.push(`%${fileName.trim()}%`);
+        paramIndex++;
+    }
+    if (email && email.trim()) {
+        const emailLower = email.trim().toLowerCase();
+        whereClause += ` AND (u.email = $${paramIndex} OR EXISTS (SELECT 1 FROM recipients r WHERE r.file_id = f.file_id AND r.email = $${paramIndex}))`;
+        params.push(emailLower);
+        paramIndex++;
+    }
+
+    const limitParam = paramIndex;
+    const offsetParam = paramIndex + 1;
+
     const countResult = await p.query(
-        `SELECT COUNT(*)::int AS total FROM files f WHERE ${whereClause}`,
+        `SELECT COUNT(*)::int AS total FROM files f LEFT JOIN users u ON f.uploaded_by_user_id = u.id WHERE ${whereClause}`,
         params,
     );
     const total = countResult.rows[0].total as number;
 
-    const limitParam = params.length + 1;
-    const offsetParam = params.length + 2;
+    params.push(limit, offset);
     const result = await p.query(
-        `SELECT f.file_id, f.file_name, f.created_at, f.expiry_time, f.status, f.uploaded_by_user_id,
-            (SELECT COUNT(*)::int FROM recipients r WHERE r.file_id = f.file_id) AS recipient_count
+        `SELECT ${selectColumns}
      FROM files f
+     LEFT JOIN users u ON f.uploaded_by_user_id = u.id
      WHERE ${whereClause}
      ORDER BY f.created_at DESC
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
-        [...params, limit, offset],
+        params,
     );
 
-    const items: TransactionRow[] = result.rows.map((row: Record<string, unknown>) => {
-        const role =
-            row.uploaded_by_user_id === userId ? TransactionRole.Sender : TransactionRole.Recipient;
-        return {
-            file_id: String(row.file_id),
-            file_name: String(row.file_name),
-            created_at: String(row.created_at),
-            expiry_time: String(row.expiry_time),
-            status: String(row.status),
-            recipient_count: Number(row.recipient_count) || 0,
-            role,
-        };
-    });
+    const items: TransactionRow[] = result.rows.map((row: Record<string, unknown>) =>
+        mapRowToTransactionRow(row, userId),
+    );
 
     return { items, total };
 }

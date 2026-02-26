@@ -10,7 +10,7 @@ import { sendError } from '../lib/errorResponse';
 import { requireAuth } from '../middleware/auth';
 import { getTransactions } from '../services/database';
 import type { TransactionsResponse } from '../types/api';
-import { UserRole } from '../types/database';
+import { ExpiryType, FileStatus, UserRole } from '../types/database';
 
 const router: express.Router = express.Router();
 
@@ -30,6 +30,17 @@ const queryValidation = [
         .isIn(['sent', 'received'])
         .withMessage('type must be sent or received'),
     query('scope').optional().isIn(['all']).withMessage('scope must be all'),
+    query('fileName')
+        .optional()
+        .trim()
+        .isLength({ max: 255 })
+        .withMessage('fileName must be at most 255 characters'),
+    query('email')
+        .optional()
+        .trim()
+        .isEmail()
+        .normalizeEmail()
+        .withMessage('email must be a valid email'),
 ];
 
 router.get(
@@ -55,6 +66,8 @@ router.get(
         const limit = Number(req.query.limit) || 20;
         const type = req.query.type as 'sent' | 'received' | undefined;
         const scope = req.query.scope === 'all' ? 'all' : undefined;
+        const fileName = typeof req.query.fileName === 'string' ? req.query.fileName : undefined;
+        const email = typeof req.query.email === 'string' ? req.query.email : undefined;
         const isAdmin = req.user.role === UserRole.Admin;
 
         if (scope === 'all' && !isAdmin) {
@@ -63,10 +76,18 @@ router.get(
         }
 
         try {
-            const opts: { page: number; limit: number; scope?: 'all'; type?: 'sent' | 'received' } =
-                { page, limit };
+            const opts: {
+                page: number;
+                limit: number;
+                scope?: 'all';
+                type?: 'sent' | 'received';
+                fileName?: string;
+                email?: string;
+            } = { page, limit };
             if (scope) opts.scope = scope;
             if (type) opts.type = type;
+            if (fileName?.trim()) opts.fileName = fileName.trim();
+            if (email?.trim()) opts.email = email.trim();
             const { items, total } = await getTransactions(
                 req.user.id,
                 req.user.email,
@@ -80,8 +101,11 @@ router.get(
                     fileName: row.file_name,
                     uploadedAt: row.created_at,
                     expiryTime: row.expiry_time,
-                    status: row.status,
+                    expiryType: row.expiry_type as ExpiryType,
+                    status: row.status as FileStatus,
                     recipientCount: row.recipient_count,
+                    recipientEmails: row.recipient_emails ?? [],
+                    uploadedByEmail: row.uploaded_by_email ?? null,
                     role: row.role,
                 })),
                 total,

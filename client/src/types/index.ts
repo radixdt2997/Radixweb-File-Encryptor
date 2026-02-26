@@ -20,6 +20,13 @@ export const ExpiryType = {
 } as const;
 export type ExpiryType = (typeof ExpiryType)[keyof typeof ExpiryType];
 
+/** User role (auth) */
+export const UserRole = {
+    Admin: 'admin',
+    User: 'user',
+} as const;
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
 export interface FileMetadata {
     fileName: string;
     fileSize: number;
@@ -68,8 +75,11 @@ export interface TransactionItem {
     fileName: string;
     uploadedAt: string;
     expiryTime: string;
+    expiryType: ExpiryType;
     status: FileStatus;
     recipientCount: number;
+    recipientEmails: string[];
+    uploadedByEmail: string | null;
     role: TransactionRole;
 }
 

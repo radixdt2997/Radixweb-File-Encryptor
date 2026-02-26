@@ -74,13 +74,22 @@ export const api = {
 
     async getTransactions(
         token: string | null,
-        params?: { page?: number; limit?: number; type?: 'sent' | 'received'; scope?: 'all' },
+        params?: {
+            page?: number;
+            limit?: number;
+            type?: 'sent' | 'received';
+            scope?: 'all';
+            fileName?: string;
+            email?: string;
+        },
     ): Promise<TransactionsResponse> {
         const search = new URLSearchParams();
         if (params?.page) search.set('page', String(params.page));
         if (params?.limit) search.set('limit', String(params.limit));
         if (params?.type) search.set('type', params.type);
         if (params?.scope) search.set('scope', params.scope);
+        if (params?.fileName?.trim()) search.set('fileName', params.fileName.trim());
+        if (params?.email?.trim()) search.set('email', params.email.trim());
         const qs = search.toString();
         const url = `${API_BASE}/transactions${qs ? `?${qs}` : ''}`;
         const response = await fetch(url, {
