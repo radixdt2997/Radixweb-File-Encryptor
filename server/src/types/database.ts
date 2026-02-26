@@ -30,7 +30,7 @@ export enum FileStatus {
 }
 
 /**
- * User record (Phase 6 auth)
+ * User record (auth)
  */
 export interface UserRecord {
     id: string;
@@ -42,7 +42,7 @@ export interface UserRecord {
 }
 
 /**
- * File record structure (PostgreSQL schema; uploaded_by_user_id for Phase 6)
+ * File record structure (PostgreSQL schema; uploaded_by_user_id for auth)
  */
 export interface FileRecord {
     id?: number;
@@ -64,7 +64,7 @@ export interface FileRecord {
     total_recipients?: number;
     verified_recipients?: number;
     downloaded_recipients?: number;
-    /** Phase 6: user who uploaded the file (null for legacy/migrated rows) */
+    /** User who uploaded the file (null for legacy/migrated rows) */
     uploaded_by_user_id?: string | null;
 }
 
@@ -126,7 +126,7 @@ export interface CreateFileData {
     otpHash: string;
     expiryMinutes: number;
     expiryType: ExpiryType;
-    /** Phase 6: user who uploaded (required when auth is enabled) */
+    /** User who uploaded (required when auth is enabled) */
     uploadedByUserId?: string | null;
 }
 

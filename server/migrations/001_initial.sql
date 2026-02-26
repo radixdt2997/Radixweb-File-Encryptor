@@ -1,4 +1,4 @@
--- Phase 6: Initial PostgreSQL schema (users, files, recipients, audit_logs)
+-- Initial PostgreSQL schema (users, files, recipients, audit_logs)
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -21,7 +21,7 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
--- Users (Phase 6 auth)
+-- Users (auth)
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- Files (uploaded_by_user_id for Phase 6)
+-- Files (uploaded_by_user_id for auth)
 CREATE TABLE IF NOT EXISTS files (
   id SERIAL PRIMARY KEY,
   file_id UUID UNIQUE NOT NULL,

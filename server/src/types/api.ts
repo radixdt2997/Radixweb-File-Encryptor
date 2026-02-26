@@ -92,7 +92,7 @@ export interface MetadataResponse {
 }
 
 /**
- * Response for GET /api/transactions (Phase 6)
+ * Response for GET /api/transactions
  */
 export interface TransactionsResponse {
     items: TransactionItem[];

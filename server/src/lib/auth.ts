@@ -1,5 +1,5 @@
 /**
- * Auth helpers: password hashing, JWT sign/verify, email domain validation (Phase 6)
+ * Auth helpers: password hashing, JWT sign/verify, email domain validation
  */
 
 import bcrypt from 'bcrypt';

@@ -18,10 +18,10 @@ export interface ServerConfig {
 }
 
 /**
- * Database configuration (PostgreSQL for Phase 6)
+ * Database configuration (PostgreSQL)
  */
 export interface DatabaseConfig {
-    /** PostgreSQL connection URL. Required for Phase 6 (dev and prod use different URLs). */
+    /** PostgreSQL connection URL (dev and prod use different URLs). */
     databaseUrl: string;
 }
 
@@ -78,7 +78,7 @@ export interface SecurityConfig {
 }
 
 /**
- * Auth configuration (Phase 6)
+ * Auth configuration
  */
 export interface AuthConfig {
     /** Secret for signing JWTs (required for auth) */

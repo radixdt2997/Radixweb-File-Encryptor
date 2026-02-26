@@ -1,5 +1,5 @@
 /**
- * Auth store (Zustand) with localStorage persist. Phase 6.
+ * Auth store (Zustand) with localStorage persist.
  */
 
 import { create } from 'zustand';

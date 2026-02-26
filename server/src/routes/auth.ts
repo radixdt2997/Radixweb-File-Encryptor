@@ -1,5 +1,5 @@
 /**
- * Auth routes: login, register, me (Phase 6)
+ * Auth routes: login, register, me
  */
 
 import express from 'express';

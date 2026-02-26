@@ -1,5 +1,5 @@
 /**
- * Login (and optional register) form. Phase 6.
+ * Login (and optional register) form.
  * Shown when user tries to access Send or Transactions without being logged in.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Secure File Server - Phase B Implementation
+ * Secure File Server
  *
  * Zero-knowledge file delivery with OTP-based key wrapping.
  * Server never sees plaintext files or OTPs.
@@ -222,13 +222,13 @@ if (server.docsEnabled) {
 // Health check (no auth needed)
 app.use('/api/health', healthRoutes);
 
-// Auth (Phase 6)
+// Auth
 app.use('/api/auth', authRoutes);
 
 // Test email (development only)
 app.use('/api/test-email', testEmailRoutes);
 
-// File upload (Phase 6: auth required)
+// File upload (auth optional; when present, uploads tied to user)
 app.use(
     '/api/upload',
     uploadLimiter,
@@ -253,7 +253,7 @@ app.use('/api/metadata', fileAccessLimiter, metadataRoutes);
 // Recipient management (with stricter rate limiting on access)
 app.use('/api/files', recipientAccessLimiter, requireAuth, recipientsRoutes);
 
-// Transactions (Phase 6: auth required)
+// Transactions (auth required)
 app.use('/api/transactions', recipientAccessLimiter, requireAuth, transactionsRoutes);
 
 // ============================================================================

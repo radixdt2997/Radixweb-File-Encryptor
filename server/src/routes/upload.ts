@@ -51,7 +51,7 @@ const uploadValidation = [
         .isLength({ min: 1, max: 255 })
         .withMessage('File name is required and must be less than 255 characters'),
 
-    // Legacy single-recipient fields (optional in Phase 3)
+    // Legacy single-recipient fields (optional)
     body('recipientEmail')
         .optional()
         .isEmail()
@@ -189,7 +189,7 @@ router.post(
             const wrappedKeyBuffer = wrappedKeyFile.buffer;
             const wrappedKeySaltBuffer = wrappedKeySaltFile.buffer;
 
-            // Determine recipients payload (Phase 3 multi-recipient)
+            // Determine recipients payload (multi-recipient)
             let recipientsPayload: RecipientPayload[] = [];
 
             if (uploadReq.body.recipients) {
@@ -265,7 +265,7 @@ router.post(
             }
             const primaryRecipientEmail = firstRecipient.email;
 
-            // Create database record (Phase 6: uploaded_by_user_id from auth)
+            // Create database record (uploaded_by_user_id from auth)
             const userId = (uploadReq as Request & { user?: { id: string } }).user?.id ?? null;
             const recordId = await createFileRecord({
                 fileId,

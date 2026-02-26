@@ -1,5 +1,5 @@
 /**
- * Auth middleware: verify JWT and attach req.user (Phase 6)
+ * Auth middleware: verify JWT and attach req.user
  */
 
 import type { Request, Response, NextFunction } from 'express';

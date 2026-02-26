@@ -133,7 +133,7 @@ router.post(
                 );
             }
 
-            // Determine whether to use recipient-specific verification (Phase 3)
+            // Determine whether to use recipient-specific verification
             let otpContext: OTPContext = {
                 otpAttempts: file.otp_attempts,
                 lastAttemptAt: file.last_attempt_at,

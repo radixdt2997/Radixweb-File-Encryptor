@@ -43,7 +43,7 @@ export const server: ServerConfig = {
 };
 
 // ============================================================================
-// DATABASE CONFIGURATION (PostgreSQL - Phase 6)
+// DATABASE CONFIGURATION (PostgreSQL)
 // ============================================================================
 
 export const database: DatabaseConfig = {
@@ -132,7 +132,7 @@ export const security: SecurityConfig = {
 };
 
 // ============================================================================
-// AUTH CONFIGURATION (Phase 6)
+// AUTH CONFIGURATION
 // ============================================================================
 
 export const auth: AuthConfig = {
@@ -230,7 +230,7 @@ export function getConfigSummary(): ConfigSummary {
 export function validateConfiguration(): boolean {
     const errors: string[] = [];
 
-    // Phase 6: PostgreSQL required
+    // PostgreSQL required
     if (!database.databaseUrl || database.databaseUrl.trim() === '') {
         errors.push('DATABASE_URL is required (PostgreSQL connection string)');
     }

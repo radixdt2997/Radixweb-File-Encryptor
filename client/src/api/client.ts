@@ -10,7 +10,7 @@ import { env } from '../config/env';
 
 const API_BASE = env.api.baseUrl;
 
-/** Auth response shapes (Phase 6) */
+/** Auth response shapes */
 export interface LoginResponse {
     token: string;
     user: { id: string; email: string; role: string };

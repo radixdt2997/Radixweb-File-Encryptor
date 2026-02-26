@@ -16,7 +16,9 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 ✅ **Rate Limiting** - Built-in protection against abuse  
 ✅ **Multi-Recipient Support** - Share with multiple recipients securely  
 ✅ **API Documentation** - Swagger UI at `/api-docs` (OpenAPI 3.0)  
-✅ **Encryption at Rest** - Optional server-side encryption for files and DB (AES-256-GCM, HKDF)
+✅ **Encryption at Rest** - Optional server-side encryption for files and DB (AES-256-GCM, HKDF)  
+✅ **User Authentication** - Login and register with JWT; optional email domain restriction  
+✅ **My Transactions** - Dashboard of sent and received files with filters (file name, email, expiry method)
 
 ## Quick Start
 
@@ -24,6 +26,7 @@ A zero-knowledge file encryption and delivery system with passwordless sharing v
 
 - Node.js 20.19+ or 22.12+
 - npm or pnpm
+- PostgreSQL (for backend: users, files, transactions)
 - Email account (Gmail recommended) with App Password
 
 ### Frontend (React + TypeScript + Tailwind)
@@ -115,15 +118,23 @@ This approach follows security best practices where even if one email account is
 
 ### 🚀 Send File
 
-- Upload and encrypt files
+- Upload and encrypt files (login optional; when logged in, uploads are tied to your account)
 - Generate secure sharing links
 - Automatic email delivery
+- Manage shared file: view recipients, revoke access, see OTP attempts (when opened from My Transactions)
 
 ### 📨 Receive File
 
-- Access files via shared links
-- Enter OTP for verification
+- Access files via shared links (from email or My Transactions)
+- Enter OTP for verification (email pre-filled when logged in)
 - Download and decrypt locally
+
+### 📋 My Transactions
+
+- View all files you sent or received
+- Filter by file name, email, and type (Sent / Received)
+- Admins can view all users’ transactions
+- Open sent files to manage recipients; open received files to download
 
 ### 🔑 Legacy Mode
 
@@ -136,13 +147,17 @@ This approach follows security best practices where even if one email account is
 | Method   | Path                                         | Description                                                                                                                                                                                                                        |
 | -------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/health`                                | Health check (DB, storage, stats). No auth.                                                                                                                                                                                        |
+| `POST`   | `/api/auth/login`                            | Login. Body: `{ "email", "password" }`. Returns `{ token, user }`.                                                                                                                                                                 |
+| `POST`   | `/api/auth/register`                         | Register (if allowed). Body: `{ "email", "password" }`. Returns `{ token, user }`.                                                                                                                                                 |
+| `GET`    | `/api/auth/me`                               | Current user. Requires `Authorization: Bearer <token>`. Returns `{ user }`.                                                                                                                                                        |
+| `GET`    | `/api/transactions`                          | List sent/received files. Auth required. Query: `page`, `limit`, `type` (sent\|received), `scope` (all, admin only), `fileName`, `email`.                                                                                         |
 | `POST`   | `/api/test-email`                            | Send test email (development only). Body: `{ "email": "..." }`.                                                                                                                                                                    |
 | `POST`   | `/api/upload`                                | Upload encrypted file + wrapped keys. Multipart: `encryptedData`, `wrappedKey`, `wrappedKeySalt`; form fields: `fileName`, `expiryMinutes`, `expiryType`, optional `recipients` (JSON) or legacy `recipientEmail`/`otp`/`otpHash`. |
 | `POST`   | `/api/verify-otp`                            | Verify OTP and get wrapped key. Body: `{ "fileId", "otp", "recipientEmail"?(multi-recipient) }`.                                                                                                                                   |
 | `GET`    | `/api/download/:fileId`                      | Download encrypted file (after OTP verified). Returns binary.                                                                                                                                                                      |
 | `GET`    | `/api/metadata/:fileId`                      | Get file metadata (name, size, expiry). No auth.                                                                                                                                                                                   |
-| `GET`    | `/api/files/:fileId/recipients`              | List recipients for a file.                                                                                                                                                                                                        |
-| `DELETE` | `/api/files/:fileId/recipients/:recipientId` | Revoke a recipient.                                                                                                                                                                                                                |
+| `GET`    | `/api/files/:fileId/recipients`              | List recipients for a file. Auth required (uploader or admin).                                                                                                                                                                     |
+| `DELETE` | `/api/files/:fileId/recipients/:recipientId` | Revoke a recipient. Auth required (uploader or admin).                                                                                                                                                                              |
 
 All API routes are rate-limited. See Security Features below for limits.
 
@@ -205,6 +220,19 @@ NODE_ENV=development
 ```
 
 For **production**, see `server/.env.example` for production rate limiting settings.
+
+### Authentication (JWT)
+
+The server uses JWT for authenticated routes (transactions, recipient list, revoke). Configure:
+
+| Variable                     | Description                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `JWT_SECRET`                 | Secret for signing JWTs. Required for auth.                                 |
+| `JWT_EXPIRES_IN_SECONDS`     | Access token lifetime (e.g. 3600 = 1 hour, 900 = 15 min). Default: 3600.   |
+| `ALLOWED_EMAIL_DOMAIN`       | Only this domain can login/register (e.g. `radixweb.com`). Default: radixweb.com. |
+| `ALLOW_SELF_REGISTRATION`    | Set to `false` to disable public registration. Default: true.              |
+
+Client stores the token (e.g. in localStorage) and sends `Authorization: Bearer <token>` on protected requests.
 
 ### Email Setup
 
@@ -334,7 +362,7 @@ Requires Web Crypto API support.
 
 ### Development Practices
 
-- **Git-based Workflow** - Phase-based branching and feature development
+- **Git-based Workflow** - Feature branching and modular development
 - **Environment Files** - Example files for easy setup (.env.example)
 - **Documentation** - Inline comments and comprehensive markdown guides
 - **Type Definitions** - Shared types between frontend and backend

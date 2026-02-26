@@ -1,5 +1,5 @@
 /**
- * My Transactions / All Transactions (Phase 6). Requires login.
+ * My Transactions / All Transactions. Requires login.
  */
 
 import { useState, useCallback } from 'react';

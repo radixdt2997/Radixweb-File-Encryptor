@@ -1,5 +1,5 @@
 /**
- * Transactions route - GET /api/transactions (Phase 6)
+ * Transactions route - GET /api/transactions
  * List file uploads for "My transactions" (user) or "All transactions" (admin).
  */
 

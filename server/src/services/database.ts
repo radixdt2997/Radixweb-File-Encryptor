@@ -1,5 +1,5 @@
 /**
- * Database Service - PostgreSQL (Phase 6)
+ * Database Service - PostgreSQL
  *
  * Uses pg (node-postgres) with DATABASE_URL. Migrations run on init.
  */
@@ -418,7 +418,7 @@ export function closeDatabase(): void {
 }
 
 // ============================================================================
-// USER (AUTH) - Phase 6
+// USER (AUTH)
 // ============================================================================
 
 export async function createUser(data: {
@@ -465,7 +465,7 @@ export async function getUserById(id: string): Promise<UserRecord | null> {
 }
 
 // ============================================================================
-// TRANSACTIONS (Phase 6) – list files for "My transactions" / "All transactions"
+// TRANSACTIONS – list files for "My transactions" / "All transactions"
 // ============================================================================
 
 export interface TransactionRow {
